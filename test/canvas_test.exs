@@ -70,7 +70,7 @@ defmodule GrokMermaid.CanvasTest do
 
     assert plain == [" 中a"]
     assert width == 4
-    assert styled == [[{" ", :none}, {"中a", :text}]]
+    assert styled == [[%{text: " ", role: :none}, %{text: "中a", role: :text}]]
   end
 
   test "flip_vertical mirrors rows and flips glyphs, text stays readable" do

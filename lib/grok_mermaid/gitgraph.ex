@@ -12,7 +12,7 @@ defmodule GrokMermaid.GitGraph do
   alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   @doc "Render a `gitGraph` source to a canvas, or `nil` when nothing parses."
-  @spec render(String.t()) :: {Canvas.t(), [String.t()]} | nil
+  @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
   def render(src) do
     case parse(src) do
       {:ok, branches, commits, fork_at, warnings} ->
@@ -164,7 +164,7 @@ defmodule GrokMermaid.GitGraph do
           end)
 
         canvas = Canvas.finalize_mask(canvas)
-        {canvas, warnings}
+        {canvas, %{}, warnings}
 
       :error ->
         nil

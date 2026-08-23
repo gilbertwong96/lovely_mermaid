@@ -8,7 +8,7 @@ defmodule GrokMermaid.Mindmap do
   alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   @doc "Render a `mindmap` source to a canvas, or `nil` when nothing parses."
-  @spec render(String.t()) :: {Canvas.t(), [String.t()]} | nil
+  @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
   def render(src) do
     case parse(src) do
       {:ok, roots, warnings} ->
@@ -29,7 +29,7 @@ defmodule GrokMermaid.Mindmap do
             Canvas.draw_text(canvas, text, Width.string_width(prefix), y, :text)
           end)
 
-        {canvas, warnings}
+        {canvas, %{}, warnings}
 
       :error ->
         nil

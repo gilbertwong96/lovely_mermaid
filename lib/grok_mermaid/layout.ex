@@ -753,14 +753,26 @@ defmodule GrokMermaid.Layout do
 
       canvas =
         Enum.reduce(ids, canvas, fn idx, canvas ->
+          node = Enum.at(graph.nodes, idx)
           extra = Enum.at(extras, idx)
+
+          canvas =
+            Canvas.set_tag(
+              canvas,
+              if(Map.get(node, :classes, []) == [],
+                do: nil,
+                else: Enum.join(Map.get(node, :classes, []), " ")
+              )
+            )
+
+          canvas = Canvas.set_href(canvas, Map.get(node, :href))
 
           case extra.kind do
             :frame ->
               draw_frame(
                 canvas,
                 Map.fetch!(placed, idx),
-                Enum.at(graph.nodes, idx).label,
+                node.label,
                 extra.sub
               )
 
@@ -772,10 +784,13 @@ defmodule GrokMermaid.Layout do
                 canvas,
                 Map.fetch!(placed, idx),
                 Enum.at(wrapped, idx),
-                Enum.at(graph.nodes, idx).shape
+                node.shape
               )
           end
         end)
+
+      canvas = Canvas.set_tag(canvas, nil)
+      canvas = Canvas.set_href(canvas, nil)
 
       canvas =
         Enum.with_index(graph.edges)
@@ -959,17 +974,32 @@ defmodule GrokMermaid.Layout do
           i = String.to_integer(String.slice(item, 1..-1//1))
 
           if String.starts_with?(item, "n") do
+            node = Enum.at(graph.nodes, i)
+
             {nodes ++
-               [%{label: Enum.at(graph.nodes, i).label, shape: Enum.at(graph.nodes, i).shape}],
-             extras ++ [%{kind: :plain}]}
+               [
+                 %{
+                   label: node.label,
+                   shape: node.shape,
+                   classes: Map.get(node, :classes, []),
+                   href: Map.get(node, :href)
+                 }
+               ], extras ++ [%{kind: :plain}]}
           else
             case build_scope(graph, i, scope_edges, direct_nodes, keep) do
               nil ->
                 {nodes, extras}
 
               sub ->
-                {nodes ++ [%{label: Enum.at(graph.groups, i).label, shape: :rect}],
-                 extras ++ [%{kind: :frame, sub: sub}]}
+                {nodes ++
+                   [
+                     %{
+                       label: Enum.at(graph.groups, i).label,
+                       shape: :rect,
+                       classes: [],
+                       href: nil
+                     }
+                   ], extras ++ [%{kind: :frame, sub: sub}]}
             end
           end
         end)

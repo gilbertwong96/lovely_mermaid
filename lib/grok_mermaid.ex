@@ -25,12 +25,23 @@ defmodule GrokMermaid do
   advisory only, never a reason to withhold the art.
   """
 
-  alias GrokMermaid.{Canvas, GitGraph, Labels, Layout, LayoutSeq, Mindmap, Parse, Pie, Timeline}
+  alias GrokMermaid.{
+    Canvas,
+    GitGraph,
+    Labels,
+    Layout,
+    LayoutSeq,
+    Mindmap,
+    Parse,
+    Pie,
+    Timeline,
+    Width
+  }
 
   @doc """
   Renders a Mermaid source to Unicode art.
 
-  Returns `%{plain: [String.t()], styled: [[{String.t(), atom()}]], width: non_neg_integer(), warnings: [String.t()]}`
+  Returns `%{plain: [String.t()], styled: [[map()]], width: non_neg_integer(), class_defs: map(), warnings: [String.t()]}`
   or `nil` when there is nothing to draw.
   """
   @spec render(String.t()) :: map() | nil
@@ -42,7 +53,7 @@ defmodule GrokMermaid do
     else
       case attempt(src) do
         nil -> nil
-        {canvas, warnings} -> canvas_to_art(canvas, warnings)
+        {canvas, class_defs, warnings} -> canvas_to_art(canvas, class_defs, warnings, src)
       end
     end
   end
@@ -53,9 +64,41 @@ defmodule GrokMermaid do
   @spec diagram_kind(String.t()) :: atom() | nil
   def diagram_kind(src), do: Parse.diagram_kind(src)
 
-  defp canvas_to_art(canvas, warnings) do
+  defp canvas_to_art(canvas, class_defs, warnings, src) do
     {plain, styled, width} = Canvas.to_lines(canvas)
-    %{plain: plain, styled: styled, width: width, warnings: warnings}
+
+    art = %{
+      plain: plain,
+      styled: styled,
+      width: width,
+      class_defs: class_defs,
+      warnings: warnings
+    }
+
+    # A frontmatter `title:` is centred above the art, in the `title` role.
+    case Parse.frontmatter_title(src) do
+      nil ->
+        art
+
+      title ->
+        tw = Width.string_width(title)
+        width = max(art.width, tw)
+        pad = String.duplicate(" ", div(width - tw, 2))
+
+        %{
+          art
+          | width: width,
+            plain: [pad <> title, "" | art.plain],
+            styled: [
+              if(pad == "",
+                do: [%{text: title, role: :title}],
+                else: [%{text: pad, role: :none}, %{text: title, role: :title}]
+              ),
+              []
+              | art.styled
+            ]
+        }
+    end
   end
 
   # Draw `src`, retrying once without its last line if the grammar rejects
@@ -77,9 +120,11 @@ defmodule GrokMermaid do
               nil ->
                 nil
 
-              {canvas, warnings} ->
+              {canvas, class_defs, warnings} ->
                 dropped = lines |> List.last() |> String.trim()
-                {canvas, warnings ++ ["dropped, unreadable final line: \"#{dropped}\""]}
+
+                {canvas, class_defs,
+                 warnings ++ ["dropped, unreadable final line: \"#{dropped}\""]}
             end
         end
 
@@ -93,13 +138,13 @@ defmodule GrokMermaid do
       :flowchart ->
         case Parse.parse_graph(src) do
           nil -> nil
-          graph -> draw_graph(graph, :flowchart)
+          graph -> draw_graph(graph)
         end
 
       :state ->
         case Parse.parse_state(src) do
           nil -> nil
-          graph -> draw_graph(graph, :flowchart)
+          graph -> draw_graph(graph)
         end
 
       :class ->
@@ -137,7 +182,7 @@ defmodule GrokMermaid do
     end
   end
 
-  defp draw_graph(graph, _kind) do
+  defp draw_graph(graph, _kind \\ :flowchart) do
     canvas =
       if graph.groups == [] do
         Layout.layout_flowchart(graph)
@@ -145,18 +190,18 @@ defmodule GrokMermaid do
         Layout.layout_grouped(graph)
       end
 
-    if canvas, do: {canvas, graph.warnings}, else: nil
+    if canvas, do: {canvas, graph.class_defs, graph.warnings}, else: nil
   end
 
   defp draw_class(graph, infos) do
     canvas = Layout.layout_class(graph, infos)
-    if canvas, do: {canvas, []}, else: nil
+    if canvas, do: {canvas, graph.class_defs, []}, else: nil
   end
 
   defp draw_sequence(seq) do
     case LayoutSeq.layout_sequence(seq) do
       nil -> nil
-      canvas -> {canvas, []}
+      canvas -> {canvas, %{}, []}
     end
   end
 end

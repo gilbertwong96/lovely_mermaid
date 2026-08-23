@@ -109,7 +109,13 @@ defmodule GrokMermaid.Canvas do
             mask: %{},
             style: %{},
             occupied: %{},
-            cur_style: @sty_solid
+            cur_style: @sty_solid,
+            # Author classes stamped on cells painted while set (see `Span.classes`).
+            tag: %{},
+            # Link target stamped on cells painted while set (see `Span.href`).
+            href: %{},
+            cur_tag: nil,
+            cur_href: nil
 
   @type t :: %__MODULE__{
           w: non_neg_integer(),
@@ -119,7 +125,11 @@ defmodule GrokMermaid.Canvas do
           mask: map(),
           style: map(),
           occupied: map(),
-          cur_style: 1 | 2 | 4
+          cur_style: 1 | 2 | 4,
+          tag: map(),
+          href: map(),
+          cur_tag: String.t() | nil,
+          cur_href: String.t() | nil
         }
 
   @doc "Create a canvas of `w` by `h` cells."
@@ -149,9 +159,27 @@ defmodule GrokMermaid.Canvas do
       c
     else
       i = y * w + x
-      %{c | ch: Map.put(c.ch, i, char), cls: Map.put(c.cls, i, cls)}
+
+      %{
+        c
+        | ch: Map.put(c.ch, i, char),
+          cls: Map.put(c.cls, i, cls),
+          tag: stamp(c.tag, i, c.cur_tag),
+          href: stamp(c.href, i, c.cur_href)
+      }
     end
   end
+
+  @doc "Set the author classes stamped on subsequently painted cells."
+  @spec set_tag(t(), String.t() | nil) :: t()
+  def set_tag(c, tag), do: %{c | cur_tag: tag}
+
+  @doc "Set the link target stamped on subsequently painted cells."
+  @spec set_href(t(), String.t() | nil) :: t()
+  def set_href(c, href), do: %{c | cur_href: href}
+
+  defp stamp(map, _i, nil), do: map
+  defp stamp(map, i, v), do: Map.put(map, i, v)
 
   @doc """
   Accumulate direction bits on a free cell.
@@ -173,7 +201,9 @@ defmodule GrokMermaid.Canvas do
           c
           | mask: Map.update(c.mask, i, bits, &Bitwise.bor(&1, bits)),
             style: Map.update(c.style, i, c.cur_style, &Bitwise.bor(&1, c.cur_style)),
-            cls: if(Map.get(c.cls, i) != :border, do: Map.put(c.cls, i, cls), else: c.cls)
+            cls: if(Map.get(c.cls, i) != :border, do: Map.put(c.cls, i, cls), else: c.cls),
+            tag: stamp(c.tag, i, c.cur_tag),
+            href: stamp(c.href, i, c.cur_href)
         }
       end
     end
@@ -311,7 +341,8 @@ defmodule GrokMermaid.Canvas do
   Group each row into runs of one class, dropping wide-glyph continuations.
   Returns `{plain, styled, width}`; blank leading/trailing rows are trimmed.
   """
-  @spec to_lines(t()) :: {[String.t()], [[{String.t(), atom()}]], non_neg_integer()}
+  @spec to_lines(t()) ::
+          {[String.t()], [[map()]], non_neg_integer()}
   def to_lines(c) do
     rows = Enum.map(0..(c.h - 1), fn y -> row_lines(c, y) end)
     rows = drop_blank(rows)
@@ -338,27 +369,42 @@ defmodule GrokMermaid.Canvas do
   end
 
   defp build_row(c, y, last) do
-    {plain, spans, run, run_cls} =
-      Enum.reduce(0..(last - 1)//1, {"", [], "", :none}, fn x, acc ->
+    {plain, spans, run, run_cls, run_tag, run_href} =
+      Enum.reduce(0..(last - 1)//1, {"", [], "", :none, nil, nil}, fn x, acc ->
         i = y * c.w + x
         char = Map.get(c.ch, i, " ")
         cls = Map.get(c.cls, i, :none)
-        {plain, spans, run, run_cls} = acc
+        tag = Map.get(c.tag, i)
+        href = Map.get(c.href, i)
+        {plain, spans, run, run_cls, run_tag, run_href} = acc
 
         cond do
           char == @cont ->
             acc
 
-          cls != run_cls and run != "" ->
-            {plain <> char, spans ++ [{run, run_cls}], char, cls}
+          (cls != run_cls or tag != run_tag or href != run_href) and run != "" ->
+            {plain <> char, spans ++ [span(run, run_cls, run_tag, run_href)], char, cls, tag,
+             href}
 
           true ->
-            {plain <> char, spans, run <> char, cls}
+            {plain <> char, spans, run <> char, cls, tag, href}
         end
       end)
 
-    spans = if run != "", do: spans ++ [{run, run_cls}], else: spans
+    spans = if run != "", do: spans ++ [span(run, run_cls, run_tag, run_href)], else: spans
     {String.trim_trailing(plain, " "), spans}
+  end
+
+  defp span(text, role, nil, nil), do: %{text: text, role: role}
+
+  defp span(text, role, tag, nil) do
+    %{text: text, role: role, classes: String.split(tag, " ")}
+  end
+
+  defp span(text, role, nil, href), do: %{text: text, role: role, href: href}
+
+  defp span(text, role, tag, href) do
+    %{text: text, role: role, classes: String.split(tag, " "), href: href}
   end
 
   defp drop_blank(rows) do

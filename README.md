@@ -21,10 +21,19 @@ end
 
 | Function | Returns |
 |---|---|
-| `GrokMermaid.render(src)` | `%{plain: [String.t()], styled: [[{text, class}]], width: pos_integer(), warnings: [String.t()]}` or `nil` |
+| `GrokMermaid.render(src)` | `%{plain: [String.t()], styled: [[span]], width: pos_integer(), class_defs: map(), warnings: [String.t()]}` or `nil` |
 | `GrokMermaid.diagram_kind(src)` | `:flowchart \| :state \| :class \| :er \| :sequence \| :pie \| :mindmap \| :timeline \| :gitgraph \| nil` |
 | `GrokMermaid.SourceBox.source_box(src, max_width \\ nil)` | Framed source lines, for when a diagram won't render |
 | `GrokMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())` | ANSI-coloured lines from `art.styled` |
+| `GrokMermaid.ClassStyle.resolve_class_style(classes, class_defs)` | Merged `classDef` style for a span, or `nil` |
+
+Each `span` in `styled` is a map `%{text, role}` with optional `classes`
+(author-assigned names from `:::name` / `class A,B name`) and `href` (a
+`click`/`link` target). `to_ansi/2` styles classed spans from `art.class_defs`
+(best effort) and wraps linked spans in OSC 8 hyperlinks.
+
+A YAML frontmatter `title:` is drawn centred above the art in the `title`
+role.
 
 `render/1` returns `nil` for blank input, syntax errors, unsupported kinds,
 and diagrams refused by layout caps. Flowcharts report dropped statements in

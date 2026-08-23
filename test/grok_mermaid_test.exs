@@ -141,7 +141,7 @@ defmodule GrokMermaidTest do
     assert art.width > 10
 
     assert Enum.all?(art.styled, fn row ->
-             Enum.all?(row, fn {_t, cls} -> cls in [:border, :title, :text] end)
+             Enum.all?(row, fn span -> span.role in [:border, :title, :text] end)
            end)
   end
 

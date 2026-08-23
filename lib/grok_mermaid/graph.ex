@@ -27,6 +27,8 @@ defmodule GrokMermaid.Graph do
             over_cap: false,
             # Text the flowchart grammar could not read and silently discarded.
             warnings: [],
+            # Parsed `classDef` declarations: name -> property map.
+            class_defs: %{},
             dir: :down
 
   @type shape :: :rect | :round | :diamond
@@ -34,7 +36,16 @@ defmodule GrokMermaid.Graph do
   @type line_kind :: :solid | :dotted | :thick
   @type dir :: :down | :up | :right | :left
 
-  @type node_t :: %{label: String.t(), shape: shape()}
+  @type node_t :: %{
+          label: String.t(),
+          shape: shape(),
+          # Author classes, from `:::name` or `class A,B name`; carried out
+          # through `Span.classes`.
+          classes: [String.t()],
+          # Link target from `click A "url"` / `link A "url"`, carried out
+          # through `Span.href`.
+          href: String.t() | nil
+        }
 
   @type edge :: %{
           from: non_neg_integer(),
@@ -49,7 +60,7 @@ defmodule GrokMermaid.Graph do
 
   @type class_info :: %{annotation: String.t() | nil, attrs: [String.t()], methods: [String.t()]}
 
-  @type t :: %__MODULE__{}
+  @type t :: %__MODULE__{class_defs: map()}
 
   @doc "Caps that keep layout bounded."
   def max_nodes, do: @max_nodes
@@ -103,7 +114,7 @@ defmodule GrokMermaid.Graph do
           {%{graph | over_cap: true}, nil}
         else
           index = Map.put(graph.index, id, length(graph.nodes))
-          nodes = graph.nodes ++ [%{label: label || id, shape: shape}]
+          nodes = graph.nodes ++ [%{label: label || id, shape: shape, classes: [], href: nil}]
           node_group = graph.node_group ++ [graph.cur_group]
           {%{graph | index: index, nodes: nodes, node_group: node_group}, length(nodes) - 1}
         end
@@ -131,5 +142,57 @@ defmodule GrokMermaid.Graph do
     else
       {%{graph | edges: graph.edges ++ [edge]}, true}
     end
+  end
+
+  @doc "Attach an author class name to a node, ignoring a repeat."
+  @spec add_class(t(), non_neg_integer(), String.t()) :: t()
+  def add_class(%__MODULE__{} = graph, idx, name) do
+    node = Enum.at(graph.nodes, idx)
+
+    if name in node.classes do
+      graph
+    else
+      nodes = List.update_at(graph.nodes, idx, fn n -> %{n | classes: n.classes ++ [name]} end)
+      %{graph | nodes: nodes}
+    end
+  end
+
+  @doc """
+  Apply collected `[ids, names]` class assignments. Run after the statement
+  walk so a `class A,B name` (or `:::` tag) may precede the nodes it names;
+  unknown ids are ignored.
+  """
+  @spec apply_classes(t(), [{String.t(), [String.t()]}]) :: t()
+  def apply_classes(%__MODULE__{} = graph, assignments) do
+    Enum.reduce(assignments, graph, fn {ids, names}, graph ->
+      Enum.reduce(ids, graph, fn id, graph ->
+        id = String.trim(id)
+
+        case Map.fetch(graph.index, id) do
+          {:ok, idx} -> Enum.reduce(names, graph, &add_class(&2, idx, &1))
+          :error -> graph
+        end
+      end)
+    end)
+  end
+
+  @doc """
+  Apply `[id, url]` link targets; the last one per id wins, unknown ids are
+  ignored. Deferred like `apply_classes`, for the same ordering reason.
+  """
+  @spec apply_hrefs(t(), [{String.t(), String.t()}]) :: t()
+  def apply_hrefs(%__MODULE__{} = graph, hrefs) do
+    Enum.reduce(hrefs, graph, fn {id, url}, graph ->
+      id = String.trim(id)
+
+      case Map.fetch(graph.index, id) do
+        {:ok, idx} ->
+          nodes = List.update_at(graph.nodes, idx, fn n -> %{n | href: url} end)
+          %{graph | nodes: nodes}
+
+        :error ->
+          graph
+      end
+    end)
   end
 end

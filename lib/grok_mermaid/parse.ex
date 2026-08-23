@@ -72,8 +72,12 @@ defmodule GrokMermaid.Parse do
     i = Enum.find_index(lines, &(String.trim(&1) != "")) || length(lines)
 
     if i < length(lines) and String.trim(Enum.at(lines, i)) == "---" do
-      i + 1 +
-        (Enum.find_index(Enum.drop(lines, i + 1), &(String.trim(&1) == "---")) || length(lines))
+      after_open = Enum.drop(lines, i + 1)
+
+      case Enum.find_index(after_open, &(String.trim(&1) == "---")) do
+        nil -> length(lines)
+        j -> i + 2 + j
+      end
     else
       0
     end
@@ -100,6 +104,237 @@ defmodule GrokMermaid.Parse do
   defp first_word(s), do: s |> String.split(~r/\s+/, trim: true) |> List.first() || ""
 
   defp words(s), do: String.split(s, ~r/\s+/, trim: true)
+
+  @doc """
+  Split `head : rest` at the first label colon, skipping `:::` tag runs so
+  `A:::hot : desc` keeps its tag with the id. `nil` when there is no colon.
+  """
+  @spec split_colon(String.t()) :: {String.t(), String.t()} | nil
+  def split_colon(s) do
+    chars = String.graphemes(s)
+    scan_colon(chars, 0)
+  end
+
+  defp scan_colon(chars, i) when i >= length(chars), do: nil
+
+  defp scan_colon(chars, i) do
+    if Enum.at(chars, i) != ":" do
+      scan_colon(chars, i + 1)
+    else
+      run =
+        Enum.reduce_while(i..(length(chars) - 1)//1, i, fn _, acc ->
+          if Enum.at(chars, acc) == ":", do: {:cont, acc + 1}, else: {:halt, acc}
+        end)
+
+      if run - i >= 3 do
+        # A `:::` tag run is not a label colon; skip past the whole run.
+        scan_colon(chars, run)
+      else
+        {Enum.take(chars, i) |> Enum.join(), Enum.drop(chars, run) |> Enum.join()}
+      end
+    end
+  end
+
+  @doc """
+  Strip trailing `:::name` tags from an id token: `A:::hot` → id `A`,
+  classes `[hot]`.
+  """
+  @spec take_tags(String.t()) :: {String.t(), [String.t()]}
+  def take_tags(token) do
+    parts = String.split(token, ":::")
+
+    case parts do
+      [_single] ->
+        {token, []}
+
+      ["" | _] ->
+        {token, []}
+
+      [id | rest] ->
+        {id, rest |> Enum.reject(&(&1 == ""))}
+    end
+  end
+
+  @doc """
+  The `title:` of a leading frontmatter block, or nil. The one frontmatter
+  key with terminal meaning — `config` and friends style mermaid's own
+  renderers and are deliberately ignored.
+  """
+  @spec frontmatter_title(String.t()) :: String.t() | nil
+  def frontmatter_title(src) do
+    lines = Labels.src_lines(src)
+    fin = frontmatter_end(lines)
+
+    lines
+    |> Enum.take(fin)
+    |> Enum.find_value(fn line ->
+      case split_once(line, ":") do
+        nil ->
+          nil
+
+        {key, value} ->
+          # Untrimmed on the left: an indented `title:` is nested under some
+          # other key, not the diagram's.
+          if String.trim_trailing(key) != "title" do
+            nil
+          else
+            t = String.trim(value)
+
+            quoted =
+              String.length(t) > 1 and
+                ((String.starts_with?(t, "\"") and String.ends_with?(t, "\"")) or
+                   (String.starts_with?(t, "'") and String.ends_with?(t, "'")))
+
+            title = if quoted, do: String.slice(t, 1..-2//1), else: t
+            title = String.trim(title)
+            if title == "", do: nil, else: title
+          end
+      end
+    end)
+  end
+
+  @doc "Split on the first occurrence of `sep`, like Rust's `split_once`."
+  @spec split_once(String.t(), String.t()) :: {String.t(), String.t()} | nil
+  def split_once(s, sep) do
+    case :binary.match(s, sep) do
+      {i, len} -> {String.slice(s, 0, i), String.slice(s, (i + len)..-1//1)}
+      :nomatch -> nil
+    end
+  end
+
+  @doc """
+  Parse the body of a `classDef` statement: `name[,name2] k1:v1,k2:v2`.
+  Values are kept verbatim; malformed pairs are skipped.
+  """
+  @spec parse_class_def(String.t(), GrokMermaid.Graph.t()) :: GrokMermaid.Graph.t()
+  def parse_class_def(st, graph) do
+    rest = String.replace_prefix(st, first_word(st), "") |> String.trim()
+
+    case :binary.match(rest, " ") do
+      :nomatch ->
+        graph
+
+      {ws, _} ->
+        names =
+          rest
+          |> String.slice(0, ws)
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&(&1 == ""))
+
+        props = parse_class_props(String.trim(String.slice(rest, ws..-1//1)))
+
+        if names == [] do
+          graph
+        else
+          class_defs =
+            Enum.reduce(names, graph.class_defs, fn name, acc -> Map.put(acc, name, props) end)
+
+          %{graph | class_defs: class_defs}
+        end
+    end
+  end
+
+  defp parse_class_props(body) do
+    body
+    |> split_top(fn c -> c == "," end)
+    |> Enum.reduce(%{}, fn pair, props ->
+      case split_once(pair, ":") do
+        nil ->
+          props
+
+        {k, v} ->
+          k = String.trim(k)
+          v = String.trim(v)
+          if k != "" and v != "", do: Map.put(props, k, v), else: props
+      end
+    end)
+  end
+
+  @doc """
+  The body of a `class A,B name` statement → `{ids, names}`. The last
+  whitespace-separated token is the name list, everything before it the ids —
+  so a space after a comma (`class A, B warn`) still reads as two ids.
+  """
+  @spec parse_class_assign(String.t()) :: {[String.t()], [String.t()]} | nil
+  def parse_class_assign(st) do
+    rest = st |> String.replace_prefix(first_word(st), "") |> String.trim()
+
+    case Regex.run(~r/\s\S*$/, rest, return: :index) do
+      nil ->
+        nil
+
+      [{ws, _len}] ->
+        split_ids =
+          fn s ->
+            s |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+          end
+
+        {split_ids.(String.slice(rest, 0, ws)), split_ids.(String.slice(rest, ws..-1//1))}
+    end
+  end
+
+  @doc """
+  `A \"url\" [tooltip]` / `A href \"url\" …` → `{id, url}`. The callback
+  forms (`call`/`callback`) return nil — their quoted string is a tooltip.
+  """
+  @spec parse_href(String.t()) :: {String.t(), String.t()} | nil
+  def parse_href(st) do
+    rest = st |> String.replace_prefix(first_word(st), "") |> String.trim()
+
+    case words(rest) do
+      [] ->
+        nil
+
+      [id | rest_words] ->
+        second = List.first(rest_words)
+
+        if second in ["call", "callback"] do
+          nil
+        else
+          case Regex.run(~r/"([^"]+)"/, rest) do
+            nil -> nil
+            [_, url] -> {id, url}
+          end
+        end
+    end
+  end
+
+  # Split on separator chars sitting outside double quotes and parentheses,
+  # dropping empty segments — the one splitter every grammar shares, so
+  # quote rules cannot drift between them.
+  defp split_top(s, is_sep) do
+    chars = String.graphemes(s)
+
+    {out, cur, _depth, _in_quotes} =
+      Enum.reduce(chars, {[], [], 0, false}, fn c, {out, cur, depth, in_quotes} ->
+        cond do
+          in_quotes ->
+            if c == "\"",
+              do: {out, cur ++ [c], depth, false},
+              else: {out, cur ++ [c], depth, true}
+
+          c == "\"" ->
+            {out, cur ++ [c], depth, true}
+
+          c in ["(", "["] ->
+            {out, cur ++ [c], depth + 1, false}
+
+          c in [")", "]"] ->
+            {out, cur ++ [c], max(depth - 1, 0), false}
+
+          is_sep.(c) and depth == 0 ->
+            seg = Enum.join(cur)
+            {if(seg != "", do: out ++ [seg], else: out), [], 0, false}
+
+          true ->
+            {out, cur ++ [c], depth, false}
+        end
+      end)
+
+    seg = Enum.join(cur)
+    if seg != "", do: out ++ [seg], else: out
+  end
 
   @doc "Lowercased header word of the first statement, if it names a known diagram."
   @spec header_kind([String.t()]) :: String.t() | nil
@@ -172,7 +407,31 @@ defmodule GrokMermaid.Parse do
     else
       dir = statements |> List.first() |> words() |> Enum.at(1) || "TB"
       graph = Graph.new(Graph.parse_dir(dir))
-      graph = Enum.reduce(Enum.drop(statements, 1), graph, &parse_statement/2)
+
+      {graph, class_assigns, hrefs} =
+        Enum.reduce(Enum.drop(statements, 1), {graph, [], []}, fn st, {graph, assigns, hrefs} ->
+          case first_word(st) |> Labels.ascii_lower() do
+            "classdef" ->
+              {parse_class_def(st, graph), assigns, hrefs}
+
+            "class" ->
+              case parse_class_assign(st) do
+                nil -> {graph, assigns, hrefs}
+                assign -> {graph, assigns ++ [assign], hrefs}
+              end
+
+            "click" ->
+              case parse_href(st) do
+                nil -> {graph, assigns, hrefs}
+                href -> {graph, assigns, hrefs ++ [href]}
+              end
+
+            _ ->
+              {parse_statement(st, graph), assigns, hrefs}
+          end
+        end)
+
+      graph = Graph.apply_hrefs(graph, hrefs) |> Graph.apply_classes(class_assigns)
       if graph.over_cap or graph.nodes == [], do: nil, else: graph
     end
   end
@@ -217,7 +476,16 @@ defmodule GrokMermaid.Parse do
       "end" ->
         %{graph | cur_group: nil}
 
-      w when w in ["classdef", "class", "style", "linkstyle", "click", "direction"] ->
+      "classdef" ->
+        graph
+
+      "class" ->
+        graph
+
+      "click" ->
+        graph
+
+      w when w in ["style", "linkstyle", "direction"] ->
         graph
 
       _ ->
@@ -364,9 +632,47 @@ defmodule GrokMermaid.Parse do
         end
 
       case Graph.node_index(graph, id, shaped.label, shaped.shape) do
-        {graph, nil} -> {graph, nil}
-        {graph, index} -> {graph, {index, shaped.after}}
+        {graph, nil} ->
+          {graph, nil}
+
+        {graph, index} ->
+          # `id:::name` (after any shape) attaches an author class to the node.
+          next = shaped.after
+
+          if Enum.at(chars, next) == ":" and Enum.at(chars, next + 1) == ":" and
+               Enum.at(chars, next + 2) == ":" do
+            k = next + 3
+
+            k =
+              Enum.reduce_while(k..(length(chars) - 1)//1, k, fn _, acc ->
+                c = Enum.at(chars, acc)
+
+                if c != nil and (Labels.is_id_char(c) or c == "-"),
+                  do: {:cont, acc + 1},
+                  else: {:halt, acc}
+              end)
+
+            # A name never ends in `-`: back off so `A:::x-->B` keeps its link.
+            k = while_ends_with_dash(chars, k, next + 3)
+
+            if k > next + 3 do
+              name = Enum.slice(chars, next + 3, k - next - 3) |> Enum.join()
+              {Graph.add_class(graph, index, name), {index, k}}
+            else
+              {graph, {index, next}}
+            end
+          else
+            {graph, {index, next}}
+          end
       end
+    end
+  end
+
+  defp while_ends_with_dash(chars, k, min) do
+    if k > min and Enum.at(chars, k - 1) == "-" do
+      while_ends_with_dash(chars, k - 1, min)
+    else
+      k
     end
   end
 
@@ -570,48 +876,61 @@ defmodule GrokMermaid.Parse do
       nil
     else
       graph = Graph.new()
-      {graph, _in_note} = parse_state_statements(Enum.drop(statements, 1), graph, false)
+
+      {graph, _in_note, assigns} =
+        parse_state_statements(Enum.drop(statements, 1), graph, false, [])
+
+      graph = Graph.apply_classes(graph, assigns)
       if graph.over_cap or graph.nodes == [], do: nil, else: graph
     end
   end
 
-  defp parse_state_statements([], graph, _in_note), do: {graph, false}
+  defp parse_state_statements([], graph, _in_note, assigns), do: {graph, false, assigns}
 
-  defp parse_state_statements([st | rest], graph, in_note) do
+  defp parse_state_statements([st | rest], graph, in_note, assigns) do
     if in_note do
-      parse_state_statements(rest, graph, Labels.ascii_lower(st) != "end note")
+      parse_state_statements(rest, graph, Labels.ascii_lower(st) != "end note", assigns)
     else
       first = Labels.ascii_lower(first_word(st))
 
       cond do
         first == "direction" ->
           graph = %{graph | dir: Graph.parse_dir(st |> words() |> Enum.at(1) || "")}
-          parse_state_statements(rest, graph, false)
+          parse_state_statements(rest, graph, false, assigns)
 
         first == "note" ->
           # A single-line `note ... : text` needs no terminator.
           in_note = not String.contains?(st, ":")
-          parse_state_statements(rest, graph, in_note)
+          parse_state_statements(rest, graph, in_note, assigns)
 
         first == "state" ->
           case parse_state_decl(st, graph) do
-            nil -> {%{graph | over_cap: true}, false}
-            graph -> parse_state_statements(rest, graph, false)
+            nil -> {%{graph | over_cap: true}, false, assigns}
+            graph -> parse_state_statements(rest, graph, false, assigns)
           end
 
-        first in ["classdef", "class", "hide", "scale", "}", "--"] ->
-          parse_state_statements(rest, graph, false)
+        first == "classdef" ->
+          parse_state_statements(rest, parse_class_def(st, graph), false, assigns)
+
+        first == "class" ->
+          case parse_class_assign(st) do
+            nil -> parse_state_statements(rest, graph, false, assigns)
+            assign -> parse_state_statements(rest, graph, false, assigns ++ [assign])
+          end
+
+        first in ["hide", "scale", "}", "--"] ->
+          parse_state_statements(rest, graph, false, assigns)
 
         String.contains?(st, "-->") ->
           case parse_transition(st, graph) do
-            nil -> {%{graph | over_cap: true}, false}
-            graph -> parse_state_statements(rest, graph, false)
+            nil -> {%{graph | over_cap: true}, false, assigns}
+            graph -> parse_state_statements(rest, graph, false, assigns)
           end
 
         true ->
           case parse_state_desc(st, graph) do
-            nil -> {%{graph | over_cap: true}, false}
-            graph -> parse_state_statements(rest, graph, false)
+            nil -> {%{graph | over_cap: true}, false, assigns}
+            graph -> parse_state_statements(rest, graph, false, assigns)
           end
       end
     end
@@ -635,16 +954,17 @@ defmodule GrokMermaid.Parse do
         [label, after_quote] ->
           rest_after = String.trim(after_quote)
 
-          id =
-            if String.starts_with?(rest_after, "as") do
-              String.trim(String.replace_prefix(rest_after, "as", ""))
-            else
-              label
-            end
+          {id, classes} =
+            take_tags(
+              if(String.starts_with?(rest_after, "as"),
+                do: String.trim(String.replace_prefix(rest_after, "as", "")),
+                else: label
+              )
+            )
 
           case Graph.node_label(graph, id, Labels.decode_html_entities(label)) do
             {_graph, nil} -> nil
-            {graph, _} -> graph
+            {graph, idx} -> Enum.reduce(classes, graph, &Graph.add_class(&2, idx, &1))
           end
 
         _ ->
@@ -662,12 +982,14 @@ defmodule GrokMermaid.Parse do
             {:round, rest, false}
         end
 
+      {id, classes} = take_tags(id)
+
       if id == "" or String.match?(id, ~r/\s/) do
         nil
       else
         case Graph.node_index(graph, id, if(stereotyped, do: id, else: nil), shape) do
           {_graph, nil} -> nil
-          {graph, _} -> graph
+          {graph, idx} -> Enum.reduce(classes, graph, &Graph.add_class(&2, idx, &1))
         end
       end
     end
@@ -684,7 +1006,12 @@ defmodule GrokMermaid.Parse do
   defp transition_loop(rest, graph, prev) do
     case String.split(rest, "-->", parts: 2) do
       [lhs, rhs] ->
-        from_id = lhs |> String.trim_trailing() |> String.replace(~r/-+$/, "") |> String.trim()
+        {from_id, from_classes} =
+          lhs
+          |> String.trim_trailing()
+          |> String.replace(~r/-+$/, "")
+          |> String.trim()
+          |> take_tags()
 
         {from, graph} =
           if prev != nil do
@@ -695,7 +1022,7 @@ defmodule GrokMermaid.Parse do
             else
               case state_endpoint(graph, from_id, true) do
                 {graph, nil} -> {nil, graph}
-                {graph, f} -> {f, graph}
+                {graph, f} -> {f, Enum.reduce(from_classes, graph, &Graph.add_class(&2, f, &1))}
               end
             end
           end
@@ -709,33 +1036,38 @@ defmodule GrokMermaid.Parse do
               _ -> -1
             end
 
-          {to_part_raw, tail} =
-            if next_arrow == -1 do
-              {rhs, ""}
-            else
-              {String.slice(rhs, 0, next_arrow), String.slice(rhs, next_arrow..-1//1)}
-            end
+          # After the label colon it is all label — mermaid never chains past
+          # a label, so an arrow inside one (`: go "x --> y"`) is text, not a
+          # link. A `:::` tag run is not a label colon.
+          colon = split_colon(rhs)
 
-          {to_part, label} =
-            case String.split(to_part_raw, ":", parts: 2) do
-              [a, b] ->
-                {a,
-                 if(String.trim(b) != "",
-                   do: Labels.decode_html_entities(String.trim(b)),
+          label_first =
+            colon != nil and (next_arrow == -1 or String.length(elem(colon, 0)) < next_arrow)
+
+          {to_part_raw, label, tail} =
+            cond do
+              label_first ->
+                {elem(colon, 0),
+                 if(String.trim(elem(colon, 1)) != "",
+                   do: Labels.decode_html_entities(String.trim(elem(colon, 1))),
                    else: nil
-                 )}
+                 ), ""}
 
-              _ ->
-                {to_part_raw, nil}
+              next_arrow == -1 ->
+                {rhs, nil, ""}
+
+              true ->
+                {String.slice(rhs, 0, next_arrow), nil, String.slice(rhs, next_arrow..-1//1)}
             end
 
-          to_id =
-            to_part
+          {to_id, to_classes} =
+            to_part_raw
             |> String.trim_leading()
             |> String.replace(~r/^>+/, "")
             |> String.trim_trailing()
             |> String.replace(~r/-+$/, "")
             |> String.trim()
+            |> take_tags()
 
           if to_id == "" do
             {graph, :error}
@@ -745,6 +1077,8 @@ defmodule GrokMermaid.Parse do
                 {graph, :error}
 
               {graph, to} ->
+                graph = Enum.reduce(to_classes, graph, &Graph.add_class(&2, to, &1))
+
                 {graph, _} =
                   Graph.push_edge(graph, %{
                     from: from,
@@ -778,7 +1112,7 @@ defmodule GrokMermaid.Parse do
   defp parse_state_desc(st, graph) do
     case String.split(st, ":", parts: 2) do
       [id, desc] ->
-        id = String.trim(id)
+        {id, classes} = id |> String.trim() |> take_tags()
         desc = String.trim(desc)
 
         if id == "" or String.match?(id, ~r/\s/) or desc == "" do
@@ -786,7 +1120,7 @@ defmodule GrokMermaid.Parse do
         else
           case Graph.node_label(graph, id, Labels.decode_html_entities(desc)) do
             {_graph, nil} -> nil
-            {graph, _} -> graph
+            {graph, idx} -> Enum.reduce(classes, graph, &Graph.add_class(&2, idx, &1))
           end
         end
 
@@ -794,9 +1128,11 @@ defmodule GrokMermaid.Parse do
         if String.match?(st, ~r/\s/) do
           nil
         else
-          case Graph.node_index(graph, st, nil, :round) do
+          {id, classes} = take_tags(st)
+
+          case Graph.node_index(graph, id, nil, :round) do
             {_graph, nil} -> nil
-            {graph, _} -> graph
+            {graph, idx} -> Enum.reduce(classes, graph, &Graph.add_class(&2, idx, &1))
           end
         end
     end
@@ -834,12 +1170,18 @@ defmodule GrokMermaid.Parse do
       graph = Graph.new()
       infos = []
 
-      case parse_class_statements(Enum.drop(statements, 1), graph, infos, nil) do
+      case parse_class_statements(Enum.drop(statements, 1), graph, infos, nil, [], []) do
         nil ->
           nil
 
-        {graph, infos, _} ->
-          if graph.over_cap or graph.nodes == [], do: nil, else: {graph, sync_infos(graph, infos)}
+        {graph, infos, _, assigns, hrefs} ->
+          graph = Graph.apply_hrefs(graph, hrefs) |> Graph.apply_classes(assigns)
+
+          if graph.over_cap or graph.nodes == [] do
+            nil
+          else
+            {graph, sync_infos(graph, infos)}
+          end
       end
     end
   end
@@ -855,22 +1197,27 @@ defmodule GrokMermaid.Parse do
   end
 
   defp declare_class(graph, infos, name) do
-    {graph, idx} = Graph.node_index(graph, name, nil, :rect)
+    {id, classes} = take_tags(name)
+    {graph, idx} = Graph.node_index(graph, id, nil, :rect)
+    graph = Enum.reduce(classes, graph, &Graph.add_class(&2, idx, &1))
     {graph, sync_infos(graph, infos), idx}
   end
 
-  defp parse_class_statements([], graph, infos, cur_class), do: {graph, infos, cur_class}
+  defp parse_class_statements([], graph, infos, cur_class, assigns, hrefs),
+    do: {graph, infos, cur_class, assigns, hrefs}
 
-  defp parse_class_statements([st | rest], graph, infos, cur_class) do
+  defp parse_class_statements([st | rest], graph, infos, cur_class, assigns, hrefs) do
     if cur_class != nil do
       if st == "}" do
-        parse_class_statements(rest, graph, infos, nil)
+        parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
       else
         parse_class_statements(
           rest,
           graph,
           List.update_at(infos, cur_class, &push_member(&1, st)),
-          cur_class
+          cur_class,
+          assigns,
+          hrefs
         )
       end
     else
@@ -879,35 +1226,67 @@ defmodule GrokMermaid.Parse do
       cond do
         first == "direction" ->
           graph = %{graph | dir: Graph.parse_dir(st |> words() |> Enum.at(1) || "")}
-          parse_class_statements(rest, graph, infos, nil)
+          parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
 
-        first in [
-          "note",
-          "callback",
-          "click",
-          "link",
-          "style",
-          "cssclass",
-          "classdef",
-          "namespace",
-          "}"
-        ] ->
-          parse_class_statements(rest, graph, infos, nil)
+        first == "classdef" ->
+          parse_class_statements(rest, parse_class_def(st, graph), infos, nil, assigns, hrefs)
+
+        first in ["link", "click"] ->
+          case parse_href(st) do
+            nil -> parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
+            href -> parse_class_statements(rest, graph, infos, nil, assigns, hrefs ++ [href])
+          end
+
+        first == "cssclass" ->
+          rest_str =
+            st
+            |> String.replace_prefix(first_word(st), "")
+            |> String.trim()
+            |> String.replace("\"", "")
+
+          case parse_class_assign("class " <> rest_str) do
+            nil -> parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
+            assign -> parse_class_statements(rest, graph, infos, nil, assigns ++ [assign], hrefs)
+          end
 
         first == "class" ->
           rest_str = String.trim(String.replace_prefix(st, "class", ""))
           open = String.ends_with?(rest_str, "{")
           name = if open, do: String.trim(String.slice(rest_str, 0..-2//1)), else: rest_str
 
-          if name == "" or String.match?(name, ~r/\s/) do
-            nil
-          else
-            {graph, infos, idx} = declare_class(graph, infos, name)
+          cond do
+            # Class names carry no spaces, so `class A,B warn` is the
+            # assignment form, as in flowcharts.
+            not open and String.match?(name, ~r/\s/) ->
+              case parse_class_assign("class " <> name) do
+                nil ->
+                  parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
 
-            if idx == nil,
-              do: nil,
-              else: parse_class_statements(rest, graph, infos, if(open, do: idx, else: nil))
+                assign ->
+                  parse_class_statements(rest, graph, infos, nil, assigns ++ [assign], hrefs)
+              end
+
+            name == "" or String.match?(name, ~r/\s/) ->
+              nil
+
+            true ->
+              {graph, infos, idx} = declare_class(graph, infos, name)
+
+              if idx == nil,
+                do: nil,
+                else:
+                  parse_class_statements(
+                    rest,
+                    graph,
+                    infos,
+                    if(open, do: idx, else: nil),
+                    assigns,
+                    hrefs
+                  )
           end
+
+        first in ["note", "callback", "style", "namespace", "}"] ->
+          parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
 
         String.starts_with?(st, "<<") ->
           case String.split(String.slice(st, 2..-1//1), ">>", parts: 2) do
@@ -927,7 +1306,7 @@ defmodule GrokMermaid.Parse do
                       %{info | annotation: String.trim(stereo)}
                     end)
 
-                  parse_class_statements(rest, graph, infos, nil)
+                  parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
                 end
               end
 
@@ -952,7 +1331,7 @@ defmodule GrokMermaid.Parse do
                       nil
                     else
                       infos = List.update_at(infos, idx, fn info -> push_member(info, text) end)
-                      parse_class_statements(rest, graph, infos, nil)
+                      parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
                     end
                   end
 
@@ -983,7 +1362,7 @@ defmodule GrokMermaid.Parse do
                         ]
                 }
 
-                parse_class_statements(rest, graph, infos, nil)
+                parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
               end
           end
       end

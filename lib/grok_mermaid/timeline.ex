@@ -9,7 +9,7 @@ defmodule GrokMermaid.Timeline do
   alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   @doc "Render a `timeline` source to a canvas, or `nil` when nothing parses."
-  @spec render(String.t()) :: {Canvas.t(), [String.t()]} | nil
+  @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
   def render(src) do
     case parse(src) do
       {:ok, title, rows, warnings} ->
@@ -60,7 +60,7 @@ defmodule GrokMermaid.Timeline do
             end
           end)
 
-        {canvas, warnings}
+        {canvas, %{}, warnings}
 
       :error ->
         nil

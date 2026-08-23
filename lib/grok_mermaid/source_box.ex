@@ -45,22 +45,36 @@ defmodule GrokMermaid.SourceBox do
     plain = ["╭" <> title <> rule <> "╮"]
 
     styled = [
-      [{"╭", :border}, {title, :title}, {rule <> "╮", :border}]
+      [
+        %{text: "╭", role: :border},
+        %{text: title, role: :title},
+        %{text: rule <> "╮", role: :border}
+      ]
     ]
 
     {plain, styled} =
       Enum.reduce(body, {plain, styled}, fn line, {plain, styled} ->
         pad = String.duplicate(" ", sat(content_w, Width.string_width(line)))
         plain = plain ++ ["│ " <> line <> pad <> " │"]
-        styled = styled ++ [[{"│ ", :border}, {line, :text}, {pad <> " │", :border}]]
+
+        styled =
+          styled ++
+            [
+              [
+                %{text: "│ ", role: :border},
+                %{text: line, role: :text},
+                %{text: pad <> " │", role: :border}
+              ]
+            ]
+
         {plain, styled}
       end)
 
     bottom = "╰" <> String.duplicate("-", inner) <> "╯"
     plain = plain ++ [bottom]
-    styled = styled ++ [[{bottom, :border}]]
+    styled = styled ++ [[%{text: bottom, role: :border}]]
 
-    %{plain: plain, styled: styled, width: inner + 2, warnings: []}
+    %{plain: plain, styled: styled, width: inner + 2, class_defs: %{}, warnings: []}
   end
 
   # Hard-break a line at `limit` columns, never splitting a wide glyph.

@@ -13,7 +13,7 @@ defmodule GrokMermaid.Pie do
   @eighths ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
 
   @doc "Render a `pie` source to a canvas, or `nil` when nothing parses."
-  @spec render(String.t()) :: {Canvas.t(), [String.t()]} | nil
+  @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
   def render(src) do
     case parse(src) do
       {:ok, title, slices, show_data, warnings} ->
@@ -68,7 +68,7 @@ defmodule GrokMermaid.Pie do
             Canvas.draw_text(canvas, suffix, suffix_x, y, :edge_label)
           end)
 
-        {canvas, warnings}
+        {canvas, %{}, warnings}
 
       :error ->
         nil
