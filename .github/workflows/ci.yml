@@ -81,7 +81,7 @@ jobs:
 
       - name: Comment coverage summary on pull request
         if: github.event_name == 'pull_request'
-        uses: irongut/CodeCoverageSummary@v1
+        uses: irongut/CodeCoverageSummary@v1.3.0
         with:
           filename: cover/cobertura.xml
           badge: true
