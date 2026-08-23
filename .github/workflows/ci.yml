@@ -70,22 +70,35 @@ jobs:
       - name: Fetch dependencies
         run: mix deps.get
 
-      - name: Probe native coverage first
+      - name: Generate coverage report
         env:
           MIX_ENV: test
-        run: mix test --cover 2>&1 | tail -5
+        run: |
+          mix test --cover > /tmp/cover.log 2>&1
+          tail -6 /tmp/cover.log
+
+      - name: Extract total coverage
+        id: total
+        run: |
+          pct=$(grep '| Total' /tmp/cover.log | awk -F'|' '{gsub(/ /, "", $2); print $2}')
+          echo "pct=$pct" >> "$GITHUB_OUTPUT"
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cobertura.xml
-          path: cover/cobertura.xml
+          name: coverage-report
+          path: cover/
 
-      - name: Comment coverage summary on pull request
+      - name: Comment coverage on pull request
         if: github.event_name == 'pull_request'
-        uses: irongut/CodeCoverageSummary@v1.3.0
+        env:
+          COVERAGE_PCT: ${{ steps.total.outputs.pct }}
+        uses: actions/github-script@v7
         with:
-          filename: cover/cobertura.xml
-          badge: true
-          format: markdown
-          output: both
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Coverage: **${process.env.COVERAGE_PCT}** (HTML report in the coverage-report artifact)`
+            })
