@@ -646,10 +646,10 @@ defmodule GrokMermaid.Parse do
           {graph, :error}
         else
           next_arrow =
-            String.split(rhs, "-->", parts: 2)
-            |> then(fn parts ->
-              if length(parts) == 2, do: String.length(Enum.at(parts, 0)), else: -1
-            end)
+            case String.split(rhs, "-->", parts: 2) do
+              [head, _rest] -> String.length(head)
+              _ -> -1
+            end
 
           {to_part_raw, tail} =
             if next_arrow == -1 do
@@ -1095,7 +1095,7 @@ defmodule GrokMermaid.Parse do
           open = String.ends_with?(st, "{")
           decl = if open, do: String.trim(String.slice(st, 0..-2//1)), else: st
 
-          if decl == "" or length(words(decl)) != 1 do
+          if decl == "" or not match?([_], words(decl)) do
             nil
           else
             {graph, infos, idx} = er_entity(graph, infos, decl)
@@ -1108,7 +1108,7 @@ defmodule GrokMermaid.Parse do
         {rel, label} ->
           tokens = words(rel)
 
-          if length(tokens) != 3 do
+          if not match?([_, _, _], tokens) do
             nil
           else
             case parse_er_op(Enum.at(tokens, 1)) do
@@ -1155,10 +1155,10 @@ defmodule GrokMermaid.Parse do
 
   defp er_entity(graph, infos, token) do
     open_idx =
-      String.split(token, "[", parts: 2)
-      |> then(fn parts ->
-        if length(parts) == 2, do: String.length(Enum.at(parts, 0)), else: nil
-      end)
+      case String.split(token, "[", parts: 2) do
+        [head, _rest] -> String.length(head)
+        _ -> nil
+      end
 
     {graph, idx} =
       if open_idx != nil do

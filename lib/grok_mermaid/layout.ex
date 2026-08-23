@@ -150,7 +150,7 @@ defmodule GrokMermaid.Layout do
   def order_ranks(by_rank, edges, ranks) do
     n = map_size(ranks)
 
-    if length(by_rank) < 2 or n < 3 do
+    if not match?([_, _ | _], by_rank) or n < 3 do
       by_rank
     else
       {parents, children} = rank_neighbours(edges, ranks)
@@ -456,8 +456,7 @@ defmodule GrokMermaid.Layout do
       lanes ->
         {assigned, count} = assign_tracks(lanes)
 
-        edge_lane =
-          Enum.reduce(assigned, %{}, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
+        edge_lane = Map.new(assigned)
 
         {edge_lane, base + 1, base + 1 + count}
     end
@@ -923,7 +922,7 @@ defmodule GrokMermaid.Layout do
     # Drop empty subgraphs, but keep any that an edge attaches to.
     keep =
       Enum.reduce((length(graph.groups) - 1)..0//-1, MapSet.new(), fn gi, keep ->
-        has_nodes = length(Map.get(direct_nodes, gi, [])) > 0
+        has_nodes = Map.get(direct_nodes, gi, []) != []
 
         has_children =
           Enum.any?(graph.groups, fn g -> g.parent == gi and MapSet.member?(keep, g.parent) end)

@@ -120,7 +120,7 @@ defmodule GrokMermaid.CoverageTest do
 
   test "source_box hard-wraps long tokens" do
     art = SourceBox.source_box("flowchart\n  #{String.duplicate("x", 50)}", 20)
-    assert length(art.plain) == 7
+    assert Enum.count(art.plain) == 7
   end
 
   test "source_box skips leading blank lines" do

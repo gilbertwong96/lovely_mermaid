@@ -10,7 +10,7 @@
         included: ["lib/", "src/", "test/"],
         excluded: [~r"/_build/", ~r"/deps/", ~r"/reference/"]
       },
-      plugins: [],
+      plugins: [{ExSlop, []}],
       requires: [],
       strict: true,
       parse_timeout: 5000,
@@ -25,7 +25,7 @@
         ],
         enabled: [
           {Credo.Check.Refactor.FunctionArity, max_arity: 12}
-        ]
+        ] ++ Enum.map(ExSlop.recommended_checks(), &{&1, []})
       }
     }
   ]
