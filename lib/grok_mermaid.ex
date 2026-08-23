@@ -26,6 +26,7 @@ defmodule GrokMermaid do
   """
 
   alias GrokMermaid.{
+    Art,
     Canvas,
     Span,
     GitGraph,
@@ -42,10 +43,9 @@ defmodule GrokMermaid do
   @doc """
   Renders a Mermaid source to Unicode art.
 
-  Returns `%{plain: [String.t()], styled: [[Span.t()]], width: non_neg_integer(), class_defs: map(), warnings: [String.t()]}`
-  or `nil` when there is nothing to draw.
+  Returns `%GrokMermaid.Art{}` or `nil` when there is nothing to draw.
   """
-  @spec render(String.t()) :: map() | nil
+  @spec render(String.t()) :: Art.t() | nil
   def render(src) when is_binary(src) do
     src = Labels.strip_controls(src)
 
@@ -68,7 +68,7 @@ defmodule GrokMermaid do
   defp canvas_to_art(canvas, class_defs, warnings, src) do
     {plain, styled, width} = Canvas.to_lines(canvas)
 
-    art = %{
+    art = %Art{
       plain: plain,
       styled: styled,
       width: width,

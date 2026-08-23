@@ -538,7 +538,7 @@ defmodule GrokMermaid.Parse do
       {id, label} = parse_subgraph_decl(rest)
       depth = graph.subgraph_depth + 1
       parent = if graph.groups == [], do: nil, else: length(graph.groups) - 1
-      groups = graph.groups ++ [%{id: id, label: label, parent: parent}]
+      groups = graph.groups ++ [%Graph.Group{id: id, label: label, parent: parent}]
       %{graph | groups: groups, cur_group: depth - 1, subgraph_depth: depth}
     end
   end
@@ -1213,7 +1213,7 @@ defmodule GrokMermaid.Parse do
     if length(graph.groups) >= Graph.max_groups() do
       nil
     else
-      groups = graph.groups ++ [%{id: id, label: label, parent: parent}]
+      groups = graph.groups ++ [%Graph.Group{id: id, label: label, parent: parent}]
       {%{graph | groups: groups}, length(groups) - 1}
     end
   end

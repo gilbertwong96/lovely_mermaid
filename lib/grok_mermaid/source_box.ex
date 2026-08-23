@@ -5,7 +5,7 @@ defmodule GrokMermaid.SourceBox do
   too wide for the space at hand.
   """
 
-  alias GrokMermaid.{Labels, Span, Width}
+  alias GrokMermaid.{Art, Labels, Span, Width}
 
   defp sat(a, b), do: max(0, a - b)
 
@@ -75,7 +75,7 @@ defmodule GrokMermaid.SourceBox do
     plain = Enum.reverse(plain, [bottom])
     styled = Enum.reverse(styled, [[%Span{text: bottom, role: :border}]])
 
-    %{plain: plain, styled: styled, width: inner + 2, class_defs: %{}, warnings: []}
+    %Art{plain: plain, styled: styled, width: inner + 2, class_defs: %{}, warnings: []}
   end
 
   # Hard-break a line at `limit` columns, never splitting a wide glyph.

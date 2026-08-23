@@ -107,7 +107,7 @@ defmodule GrokMermaid.ParseTest do
       """)
 
     assert labels(g) == ["A", "B", "C"]
-    assert g.groups == [%{id: "one", label: "Group One", parent: nil}]
+    assert g.groups == [%GrokMermaid.Graph.Group{id: "one", label: "Group One", parent: nil}]
 
     assert plain_edges(g) == [
              {0, 1, nil, :arrow, :none, :solid},

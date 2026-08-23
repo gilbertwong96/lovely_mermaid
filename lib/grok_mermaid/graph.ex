@@ -24,6 +24,16 @@ defmodule GrokMermaid.Graph do
     defstruct [:from, :to, :label, :head_to, :head_from, :line]
   end
 
+  defmodule Group do
+    @moduledoc false
+    defstruct [:id, :label, :parent]
+  end
+
+  defmodule ClassInfo do
+    @moduledoc false
+    defstruct [:annotation, :attrs, :methods]
+  end
+
   defstruct nodes: [],
             edges: [],
             index: %{},
@@ -66,9 +76,13 @@ defmodule GrokMermaid.Graph do
           line: line_kind()
         }
 
-  @type group :: %{id: String.t(), label: String.t(), parent: non_neg_integer() | nil}
+  @type group :: %Group{id: String.t(), label: String.t(), parent: non_neg_integer() | nil}
 
-  @type class_info :: %{annotation: String.t() | nil, attrs: [String.t()], methods: [String.t()]}
+  @type class_info :: %ClassInfo{
+          annotation: String.t() | nil,
+          attrs: [String.t()],
+          methods: [String.t()]
+        }
 
   @type t :: %__MODULE__{class_defs: map()}
 
@@ -81,7 +95,7 @@ defmodule GrokMermaid.Graph do
 
   @doc "Empty class/ER box compartment info."
   @spec empty_class_info() :: class_info()
-  def empty_class_info, do: %{annotation: nil, attrs: [], methods: []}
+  def empty_class_info, do: %ClassInfo{annotation: nil, attrs: [], methods: []}
 
   @doc """
   `LR`/`RL`/`BT` as written in a header or `direction` statement; else

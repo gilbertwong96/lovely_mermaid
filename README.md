@@ -5,8 +5,9 @@ Mermaid diagrams as Unicode box-drawing art for terminals.
 
 ```elixir
 GrokMermaid.render("flowchart LR\n  A[Start] --> B[Done]")
-# => %{plain: ["┌───────┐    ┌──────┐", "│ Start ├───▶│ Done │", ...],
-#     styled: [...], width: 21, warnings: []}
+# => %GrokMermaid.Art{
+#      plain: ["┌───────┐    ┌──────┐", "│ Start ├───▶│ Done │", ...],
+#      styled: [...], width: 21, class_defs: %{}, warnings: []}
 ```
 
 ## Installation
@@ -21,7 +22,7 @@ end
 
 | Function | Returns |
 |---|---|
-| `GrokMermaid.render(src)` | `%{plain: [String.t()], styled: [[span]], width: pos_integer(), class_defs: map(), warnings: [String.t()]}` or `nil` |
+| `GrokMermaid.render(src)` | `%GrokMermaid.Art{}` (`plain`, `styled` [[span]], `width`, `class_defs`, `warnings`) or `nil` |
 | `GrokMermaid.diagram_kind(src)` | `:flowchart \| :state \| :class \| :er \| :sequence \| :pie \| :mindmap \| :timeline \| :gitgraph \| nil` |
 | `GrokMermaid.SourceBox.source_box(src, max_width \\ nil)` | Framed source lines, for when a diagram won't render |
 | `GrokMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())` | ANSI-coloured lines from `art.styled` |
