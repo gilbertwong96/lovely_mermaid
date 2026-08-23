@@ -1,7 +1,7 @@
 defmodule LovelyMermaid.Mindmap do
   @moduledoc """
   `mindmap`: an indentation tree, drawn the way every TUI draws trees
-  (`├──`/`└──` guides), ported from grok-mermaid's mindmap.ts. Parses raw
+  (`├──`/`└──` guides), ported from lovely-mermaid's mindmap.ts. Parses raw
   lines rather than statements — the indentation IS the grammar.
   """
 

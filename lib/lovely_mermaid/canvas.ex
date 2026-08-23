@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.Canvas do
   @moduledoc """
-  A grid of cells, ported from grok-mermaid's canvas.ts.
+  A grid of cells, ported from lovely-mermaid's canvas.ts.
 
   Edges accumulate as direction bits rather than glyphs so that crossings
   and junctions resolve correctly whatever order they are drawn in;

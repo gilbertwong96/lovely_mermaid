@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.Labels do
   @moduledoc """
-  Label text helpers, ported from grok-mermaid's labels.ts: control
+  Label text helpers, ported from lovely-mermaid's labels.ts: control
   stripping, HTML entity decoding, markdown/HTML tag stripping, and
   width-aware wrapping and truncation.
   """

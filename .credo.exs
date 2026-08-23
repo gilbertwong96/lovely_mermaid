@@ -1,4 +1,4 @@
-# Credo configuration. This project is a faithful port of grok-mermaid's
+# Credo configuration. This project is a faithful port of lovely-mermaid's
 # TypeScript: the layout/parse loops intentionally keep the reference
 # structure, so nesting and complexity thresholds are relaxed compared to
 # the strict defaults while every other check stays on.

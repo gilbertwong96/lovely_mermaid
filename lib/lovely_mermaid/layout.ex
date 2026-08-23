@@ -1,7 +1,7 @@
 defmodule LovelyMermaid.Layout do
   @moduledoc """
   Graph layout: rank, order, place, route, draw. Ported from
-  grok-mermaid's layout.ts.
+  lovely-mermaid's layout.ts.
 
   Follows the Sugiyama outline — assign ranks along the flow axis, reorder
   within ranks to cut crossings, then relax positions on the cross axis so

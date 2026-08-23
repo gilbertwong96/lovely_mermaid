@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Initial release: Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid) (formerly grok-mermaid).
+Initial release: Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid).
 
 - `LovelyMermaid.render/1` — render Mermaid diagrams as Unicode box-drawing art
 - Diagram kinds: `flowchart`/`graph` (incl. `subgraph`), `stateDiagram`,

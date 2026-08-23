@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.LayoutSeq do
   @moduledoc """
-  Sequence diagram layout, ported from grok-mermaid's layout-seq.ts.
+  Sequence diagram layout, ported from lovely-mermaid's layout-seq.ts.
 
   Participants get one column each, with lifelines running the full height
   and a box repeated at top and bottom. Column gaps are solved from the

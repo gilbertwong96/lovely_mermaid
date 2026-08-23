@@ -1,19 +1,19 @@
 defmodule LovelyMermaid.Width do
   @moduledoc """
-  Display width, measured in grapheme clusters, mirroring grok-mermaid's
+  Display width, measured in grapheme clusters, mirroring lovely-mermaid's
   width.ts.
 
   A cluster is the unit both of measuring and of painting, so a box is always
   sized for exactly what gets drawn into it. Clustering uses
   `String.graphemes/1` (UAX #29, the same rules as `Intl.Segmenter`), and
   per-code-point widths come from the `unicode-width` crate via
-  grok-mermaid's generated table.
+  lovely-mermaid's generated table.
 
   Zero is a real answer — a soft hyphen or zero-width space occupies nothing.
   """
 
   # [lo, hi, width] runs covering the whole code point space, generated from
-  # grok-mermaid's width-data.ts (do not edit by hand).
+  # lovely-mermaid's width-data.ts (do not edit by hand).
   @widths [
     {0x0, 0xAC, 1},
     {0xAD, 0xAD, 0},

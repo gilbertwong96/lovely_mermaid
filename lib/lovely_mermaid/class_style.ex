@@ -1,7 +1,7 @@
 defmodule LovelyMermaid.ClassStyle do
   @moduledoc """
   Best-effort interpretation of `classDef` styles for a cell grid, ported
-  from grok-mermaid's class-style.ts and css-colors.ts.
+  from lovely-mermaid's class-style.ts and css-colors.ts.
 
   A terminal cell can express a foreground, a background and boldness —
   nothing else. `fill` is the node background, `stroke` its border,

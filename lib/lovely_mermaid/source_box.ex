@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.SourceBox do
   @moduledoc """
-  The raw source in a framed box, ported from grok-mermaid's
+  The raw source in a framed box, ported from lovely-mermaid's
   source-box.ts. What to show when `render` returns `nil`, or returns art
   too wide for the space at hand.
   """

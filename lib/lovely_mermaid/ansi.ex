@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.Ansi do
   @moduledoc """
-  SGR parameter per semantic class, ported from grok-mermaid's ansi.ts.
+  SGR parameter per semantic class, ported from lovely-mermaid's ansi.ts.
   A class left out is printed unstyled.
   """
 

@@ -10,7 +10,7 @@ defmodule LovelyMermaid.Parse do
   end
 
   @moduledoc """
-  Source text to diagram model, ported from grok-mermaid's parse.ts.
+  Source text to diagram model, ported from lovely-mermaid's parse.ts.
 
   Every `parse_*` returns `nil` when the source is not that kind of
   diagram, or when it exceeds a cap — `render` tries each in turn and

@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.Pie do
   @moduledoc """
-  `pie`: proportions as a labelled bar list, ported from grok-mermaid's
+  `pie`: proportions as a labelled bar list, ported from lovely-mermaid's
   pie.ts. A terminal has no circle worth drawing; bars carry the same
   information in less space. Lenient: an unreadable statement is dropped
   and recorded in `warnings`.

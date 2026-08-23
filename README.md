@@ -1,6 +1,6 @@
 # LovelyMermaid
 
-Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid) (formerly grok-mermaid) — render
+Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid) — render
 Mermaid diagrams as Unicode box-drawing art for terminals.
 
 ```elixir

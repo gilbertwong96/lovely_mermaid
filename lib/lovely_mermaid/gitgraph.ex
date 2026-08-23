@@ -2,7 +2,7 @@ defmodule LovelyMermaid.GitGraph do
   @moduledoc """
   `gitGraph`: commit lanes, drawn the way `git log --graph` draws them —
   newest commit on top, one column per branch, connector rows where
-  history splits, ported from grok-mermaid's gitgraph.ts. Lenient: an
+  history splits, ported from lovely-mermaid's gitgraph.ts. Lenient: an
   unreadable statement is dropped and recorded in `warnings`.
 
   Connector rows go through the canvas direction bits, so a merge reaching

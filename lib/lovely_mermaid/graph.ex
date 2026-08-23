@@ -1,6 +1,6 @@
 defmodule LovelyMermaid.Graph do
   @moduledoc """
-  The shared diagram model, ported from grok-mermaid's graph.ts.
+  The shared diagram model, ported from lovely-mermaid's graph.ts.
 
   Flowchart, state, class and ER sources all parse into a `Graph`; only
   sequence diagrams have their own model.

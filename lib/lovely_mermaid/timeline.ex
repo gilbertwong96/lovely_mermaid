@@ -1,7 +1,7 @@
 defmodule LovelyMermaid.Timeline do
   @moduledoc """
   `timeline`: periods and their events as a vertical list — one row per
-  event, the period named on its first row, ported from grok-mermaid's
+  event, the period named on its first row, ported from lovely-mermaid's
   timeline.ts. Lenient: an unreadable statement is dropped and recorded
   in `warnings`.
   """
