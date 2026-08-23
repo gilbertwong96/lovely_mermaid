@@ -57,15 +57,15 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.20"
-          otp-version: "27"
+          otp-version: "29"
 
       - uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-1.20-27-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-1.20-27-
+          key: ${{ runner.os }}-mix-1.20-29-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-1.20-29-
 
       - name: Fetch dependencies
         run: mix deps.get
@@ -73,32 +73,19 @@ jobs:
       - name: Generate coverage report
         env:
           MIX_ENV: test
-        run: |
-          set -o pipefail
-          mix test --cover 2>&1 | tee /tmp/cover.log | tail -20
-
-      - name: Extract total coverage
-        id: total
-        run: |
-          pct=$(grep '| Total' /tmp/cover.log | awk -F'|' '{gsub(/ /, "", $2); print $2}')
-          echo "pct=$pct" >> "$GITHUB_OUTPUT"
+        run: mix coveralls.cobertura
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: cover/
+          name: cobertura.xml
+          path: cover/cobertura.xml
 
-      - name: Comment coverage on pull request
+      - name: Comment coverage summary on pull request
         if: github.event_name == 'pull_request'
-        env:
-          COVERAGE_PCT: ${{ steps.total.outputs.pct }}
-        uses: actions/github-script@v7
+        uses: irongut/CodeCoverageSummary@v1.3.0
         with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `Coverage: **${process.env.COVERAGE_PCT}** (HTML report in the coverage-report artifact)`
-            })
+          filename: cover/cobertura.xml
+          badge: true
+          format: markdown
+          output: both

@@ -16,6 +16,9 @@ defmodule LovelyMermaid.MixProject do
       # Quality gates
       dialyzer: [plt_add_apps: [:mix]],
 
+      # Coverage
+      test_coverage: [tool: ExCoveralls],
+
       # Package
       description: "Render Mermaid diagrams as Unicode box-drawing art for terminals",
       package: package(),
@@ -46,7 +49,8 @@ defmodule LovelyMermaid.MixProject do
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.8", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end
 
