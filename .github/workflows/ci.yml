@@ -45,3 +45,45 @@ jobs:
 
       - name: Quality gates
         run: mix ci
+
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "27"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      - name: Generate coverage report
+        run: mix coveralls.cobertura
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura.xml
+          path: cover/cobertura.xml
+
+      - name: Comment coverage summary on pull request
+        if: github.event_name == 'pull_request'
+        uses: irongut/CodeCoverageSummary@v1
+        with:
+          filename: cover/cobertura.xml
+          badge: true
+          format: markdown
+          output: both
