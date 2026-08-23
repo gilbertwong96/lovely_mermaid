@@ -16,7 +16,6 @@ defmodule LovelyMermaid.MixProject do
       # Quality gates
       dialyzer: [plt_add_apps: [:mix]],
 
-
       # Package
       description: "Render Mermaid diagrams as Unicode box-drawing art for terminals",
       package: package(),

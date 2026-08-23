@@ -74,8 +74,8 @@ jobs:
         env:
           MIX_ENV: test
         run: |
-          mix test --cover > /tmp/cover.log 2>&1
-          tail -6 /tmp/cover.log
+          set -o pipefail
+          mix test --cover 2>&1 | tee /tmp/cover.log | tail -20
 
       - name: Extract total coverage
         id: total
