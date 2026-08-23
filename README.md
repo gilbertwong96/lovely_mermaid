@@ -1,5 +1,10 @@
 # LovelyMermaid
 
+[![CI](https://github.com/gilbertwong96/lovely_mermaid/actions/workflows/ci.yml/badge.svg)](https://github.com/gilbertwong96/lovely_mermaid/actions/workflows/ci.yml)
+[![Elixir](https://img.shields.io/badge/elixir-1.19+-purple.svg)](https://elixir-lang.org)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Hex.pm](https://img.shields.io/hexpm/v/lovely_mermaid.svg)](https://hex.pm/packages/lovely_mermaid)
+
 Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid) — render
 Mermaid diagrams as Unicode box-drawing art for terminals.
 
