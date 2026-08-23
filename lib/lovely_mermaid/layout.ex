@@ -17,7 +17,10 @@ defmodule LovelyMermaid.Layout do
   @pad 1
 
   defmodule Placed do
-    @moduledoc false
+    @moduledoc """
+    One node as placed during layout: box position (`x`/`y`), size
+    (`w`/`h`), centre (`cx`/`cy`) and `rank` on the flow axis.
+    """
     defstruct [:x, :y, :w, :h, :cx, :cy, :rank]
   end
 

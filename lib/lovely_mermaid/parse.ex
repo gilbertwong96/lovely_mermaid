@@ -1,11 +1,19 @@
 defmodule LovelyMermaid.Parse do
   defmodule Shaped do
-    @moduledoc false
+    @moduledoc """
+    A flowchart node shape under construction: the `shape` kind, its
+    `label`, the source index `after` the bracket form, and whether it
+    was left `unclosed`.
+    """
     defstruct [:shape, :label, :after, :unclosed]
   end
 
   defmodule Link do
-    @moduledoc false
+    @moduledoc """
+    One flowchart link edge: `left`/`right` node ids, the `line` style,
+    an optional `label`, and `next` — the source index after the link,
+    where chained edges continue.
+    """
     defstruct [:label, :left, :line, :next, :right]
   end
 
@@ -2003,7 +2011,14 @@ defmodule LovelyMermaid.Parse do
 
   # A sequence diagram model (participants and items).
   defmodule Sequence do
-    @moduledoc false
+    @moduledoc """
+    The parsed `sequenceDiagram` model: `labels` — participant names in
+    display order; `index` — participant id to position mapping; `items` —
+    the `:message`, `:note` and `:divider` actions in source order.
+
+    Produced by `parse_sequence/1` and consumed by
+    `LovelyMermaid.LayoutSeq.layout_sequence/1`.
+    """
     defstruct labels: [], index: %{}, items: []
 
     @type note_anchor ::

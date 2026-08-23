@@ -9,7 +9,10 @@ defmodule LovelyMermaid.Timeline do
   alias LovelyMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   defmodule Row do
-    @moduledoc false
+    @moduledoc """
+    One `timeline` row: the `period` name, the `event` text, and the
+    `section` header it belongs to (nil outside sections).
+    """
     defstruct [:period, :event, :section]
 
     def new(period, event, section),

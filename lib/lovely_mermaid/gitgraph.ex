@@ -12,7 +12,10 @@ defmodule LovelyMermaid.GitGraph do
   alias LovelyMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   defmodule Commit do
-    @moduledoc false
+    @moduledoc """
+    One `gitGraph` commit: its `lane`, `id`, optional `tag`, and
+    `merge_from` — the lane it was merged from (nil for a plain commit).
+    """
     defstruct [:lane, :id, :tag, :merge_from]
 
     @type t :: %__MODULE__{

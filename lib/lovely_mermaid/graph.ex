@@ -15,22 +15,34 @@ defmodule LovelyMermaid.Graph do
   @max_members 8
 
   defmodule Node do
-    @moduledoc false
+    @moduledoc """
+    One graph node: `label`, `shape`, author-assigned `classes` and an
+    `href` link target.
+    """
     defstruct [:label, :shape, :classes, :href]
   end
 
   defmodule Edge do
-    @moduledoc false
+    @moduledoc """
+    One graph edge: `from`/`to` node ids, an optional `label`, arrow
+    heads at each end and the `line` style.
+    """
     defstruct [:from, :to, :label, :head_to, :head_from, :line]
   end
 
   defmodule Group do
-    @moduledoc false
+    @moduledoc """
+    One subgraph: its `id`, `label` and `parent` group id (nil at top
+    level).
+    """
     defstruct [:id, :label, :parent]
   end
 
   defmodule ClassInfo do
-    @moduledoc false
+    @moduledoc """
+    One class-diagram box: an `annotation` (such as `<<interface>>`),
+    plus the `attrs` and `methods` member lists.
+    """
     defstruct [:annotation, :attrs, :methods]
   end
 
