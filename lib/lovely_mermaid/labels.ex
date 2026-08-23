@@ -92,7 +92,7 @@ defmodule LovelyMermaid.Labels do
 
   @doc "Matches Rust's `char::is_alphanumeric`."
   @spec is_alphanumeric(String.t()) :: boolean()
-  def is_alphanumeric(c), do: String.match?(c, ~r/[\p{Alphabetic}\p{N}]/u)
+  def is_alphanumeric(c), do: String.match?(c, ~r/[\p{Xan}]/u)
 
   @doc "Characters allowed in a bare node/state/class identifier."
   @spec is_id_char(String.t()) :: boolean()
