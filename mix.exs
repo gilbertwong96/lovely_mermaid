@@ -29,9 +29,19 @@ defmodule LovelyMermaid.MixProject do
       homepage_url: @source_url,
       source_ref: "v#{@version}",
       docs: [
-        main: "LovelyMermaid",
+        main: "readme",
         source_url: @source_url,
-        source_ref: "v#{@version}"
+        source_ref: "v#{@version}",
+        extras: ["README.md", "CHANGELOG.md", "PORTING.md"],
+        # Nested data-model modules (Parse.Shaped, Graph.Node, ...) fold
+        # under their parent module in the sidebar.
+        nest_modules_by_prefix: [
+          LovelyMermaid.Parse,
+          LovelyMermaid.Graph,
+          LovelyMermaid.Timeline,
+          LovelyMermaid.GitGraph,
+          LovelyMermaid.Layout
+        ]
       ]
     ]
   end
