@@ -19,7 +19,7 @@ defmodule GrokMermaid.Layout do
   @gap_x 3
   @gap_y 2
   # Refuse to allocate a canvas larger than this many cells.
-  @max_canvas_cells 1_048_576
+  @max_canvas_cells 2_097_152
 
   @type placed :: %{
           x: integer(),
@@ -431,24 +431,42 @@ defmodule GrokMermaid.Layout do
 
   # ----------------------------------------------------------------- placement
 
+  defp assign_bus_tracks(graph, ranks, centers, vertical, max_rank) do
+    Enum.reduce(0..(max_rank - 1)//1, {%{}, %{}}, fn r, {edge_bus, bus_tracks} ->
+      spans = bus_spans(graph, ranks, centers, r, vertical)
+
+      if spans == [] do
+        {edge_bus, bus_tracks}
+      else
+        {assigned, count} = assign_tracks(spans)
+
+        edge_bus =
+          Enum.reduce(assigned, edge_bus, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
+
+        {edge_bus, Map.put(bus_tracks, r, count)}
+      end
+    end)
+  end
+
+  defp assign_lane_tracks(graph, ranks, placed, vertical, base) do
+    case lane_spans(graph, ranks, placed, vertical) do
+      [] ->
+        {%{}, 0, base}
+
+      lanes ->
+        {assigned, count} = assign_tracks(lanes)
+
+        edge_lane =
+          Enum.reduce(assigned, %{}, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
+
+        {edge_lane, base + 1, base + 1 + count}
+    end
+  end
+
   defp place_td(ranks, max_rank, by_rank, sizes, graph, placed) do
     centers = assign_positions(by_rank, sizes.layW, @gap_x, graph.edges, ranks)
 
-    {edge_bus, bus_tracks} =
-      Enum.reduce(0..(max_rank - 1), {%{}, %{}}, fn r, {edge_bus, bus_tracks} ->
-        spans = bus_spans(graph, ranks, centers, r, false)
-
-        if spans == [] do
-          {edge_bus, bus_tracks}
-        else
-          {assigned, count} = assign_tracks(spans)
-
-          edge_bus =
-            Enum.reduce(assigned, edge_bus, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
-
-          {edge_bus, Map.put(bus_tracks, r, count)}
-        end
-      end)
+    {edge_bus, bus_tracks} = assign_bus_tracks(graph, ranks, centers, false, max_rank)
 
     rank_h =
       Enum.map(by_rank, fn row ->
@@ -460,7 +478,7 @@ defmodule GrokMermaid.Layout do
       end)
 
     rank_y =
-      Enum.reduce(1..max_rank, %{0 => 0}, fn r, acc ->
+      Enum.reduce(1..max_rank//1, %{0 => 0}, fn r, acc ->
         Map.put(
           acc,
           r,
@@ -513,19 +531,7 @@ defmodule GrokMermaid.Layout do
         end
       end)
 
-    {edge_lane, lane_base, canvas_w} =
-      case lane_spans(graph, ranks, placed, true) do
-        [] ->
-          {%{}, 0, content_w}
-
-        lanes ->
-          {assigned, count} = assign_tracks(lanes)
-
-          edge_lane =
-            Enum.reduce(assigned, %{}, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
-
-          {edge_lane, content_w + 1, content_w + 1 + count}
-      end
+    {edge_lane, lane_base, canvas_w} = assign_lane_tracks(graph, ranks, placed, true, content_w)
 
     {%{
        canvas_w: canvas_w,
@@ -555,24 +561,10 @@ defmodule GrokMermaid.Layout do
 
     centers = assign_positions(by_rank, sizes.layH, 1, graph.edges, ranks)
 
-    {edge_bus, bus_tracks} =
-      Enum.reduce(0..(max_rank - 1), {%{}, %{}}, fn r, {edge_bus, bus_tracks} ->
-        spans = bus_spans(graph, ranks, centers, r, true)
-
-        if spans == [] do
-          {edge_bus, bus_tracks}
-        else
-          {assigned, count} = assign_tracks(spans)
-
-          edge_bus =
-            Enum.reduce(assigned, edge_bus, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
-
-          {edge_bus, Map.put(bus_tracks, r, count)}
-        end
-      end)
+    {edge_bus, bus_tracks} = assign_bus_tracks(graph, ranks, centers, true, max_rank)
 
     rank_x =
-      Enum.reduce(1..max_rank, %{0 => 0}, fn r, acc ->
+      Enum.reduce(1..max_rank//1, %{0 => 0}, fn r, acc ->
         Map.put(
           acc,
           r,
@@ -621,19 +613,7 @@ defmodule GrokMermaid.Layout do
         end)
       end)
 
-    {edge_lane, lane_base, canvas_h} =
-      case lane_spans(graph, ranks, placed, false) do
-        [] ->
-          {%{}, 0, diagram_h}
-
-        lanes ->
-          {assigned, count} = assign_tracks(lanes)
-
-          edge_lane =
-            Enum.reduce(assigned, %{}, fn {idx, slot}, acc -> Map.put(acc, idx, slot) end)
-
-          {edge_lane, diagram_h + 1, diagram_h + 1 + count}
-      end
+    {edge_lane, lane_base, canvas_h} = assign_lane_tracks(graph, ranks, placed, false, diagram_h)
 
     {%{
        canvas_w: canvas_w,
@@ -649,9 +629,10 @@ defmodule GrokMermaid.Layout do
 
   @doc "Rank, place, draw and route a graph onto a fresh canvas."
   @spec layout_canvas(GrokMermaid.Graph.t(), [extra()]) :: Canvas.t() | nil
+  def layout_canvas(%GrokMermaid.Graph{nodes: []}, _extras), do: nil
+
   def layout_canvas(graph, extras) do
     n = length(graph.nodes)
-    if n == 0, do: nil
 
     ranks = compute_ranks(graph)
     max_rank = ranks |> Map.values() |> Enum.max(fn -> 0 end)
@@ -856,42 +837,202 @@ defmodule GrokMermaid.Layout do
     if canvas, do: orient(canvas, graph), else: nil
   end
 
+  # ------------------------------------------------------------------- groups
+
+  # Subgraph layout: edges are bucketed by the scope that draws them, frames
+  # are laid out recursively bottom-up, and the top scope is drawn last.
+  # Ported from layout.ts `layoutGrouped` / `buildScope`.
+
+  defp node_key(i), do: "n#{i}"
+  defp group_key(g), do: "g#{g}"
+
+  @doc "Subgraph frames nested inside each other, edges routed per scope."
+  @spec layout_grouped(GrokMermaid.Graph.t()) :: Canvas.t() | nil
+  def layout_grouped(graph) do
+    # A node whose id matches a subgraph id stands in for that subgraph.
+    proxy =
+      Enum.reduce(Enum.with_index(graph.groups), %{}, fn {g, gi}, acc ->
+        case Map.get(graph.index, g.id) do
+          nil -> acc
+          ni -> Map.put(acc, ni, gi)
+        end
+      end)
+
+    group_chain = fn g ->
+      Enum.reduce_while(
+        Stream.iterate(g, fn cur -> Enum.at(graph.groups, cur).parent end),
+        [],
+        fn
+          nil, acc -> {:halt, acc}
+          cur, acc -> {:cont, [cur | acc]}
+        end
+      )
+      |> Enum.reverse()
+    end
+
+    endpoint = fn n ->
+      case Map.get(proxy, n) do
+        nil ->
+          {node_key(n), group_chain.(Enum.at(graph.node_group, n))}
+
+        gi ->
+          {group_key(gi), group_chain.(Enum.at(graph.groups, gi).parent)}
+      end
+    end
+
+    {scope_edges, referenced} =
+      Enum.reduce(Enum.with_index(graph.edges), {%{}, MapSet.new()}, fn {e, ei},
+                                                                        {scope_edges, referenced} ->
+        {f_key, f_chain} = endpoint.(e.from)
+        {t_key, t_chain} = endpoint.(e.to)
+
+        k =
+          Enum.reduce_while(0..(min(length(f_chain), length(t_chain)) - 1)//1, 0, fn i, k ->
+            if Enum.at(f_chain, i) == Enum.at(t_chain, i) do
+              {:cont, i + 1}
+            else
+              {:halt, k}
+            end
+          end)
+
+        scope = if k == 0, do: nil, else: Enum.at(f_chain, k - 1)
+        f_key = if length(f_chain) > k, do: group_key(Enum.at(f_chain, k)), else: f_key
+        t_key = if length(t_chain) > k, do: group_key(Enum.at(t_chain, k)), else: t_key
+
+        referenced =
+          [f_key, t_key]
+          |> Enum.filter(&String.starts_with?(&1, "g"))
+          |> Enum.reduce(referenced, fn "g" <> rest, acc ->
+            MapSet.put(acc, String.to_integer(rest))
+          end)
+
+        {Map.update(scope_edges, scope, [{f_key, t_key, ei}], &(&1 ++ [{f_key, t_key, ei}])),
+         referenced}
+      end)
+
+    # Nodes that belong directly to a scope, skipping proxies.
+    direct_nodes =
+      Enum.reduce(Enum.with_index(graph.node_group), %{}, fn {g, ni}, acc ->
+        if Map.has_key?(proxy, ni) do
+          acc
+        else
+          Map.update(acc, g, [ni], &(&1 ++ [ni]))
+        end
+      end)
+
+    # Drop empty subgraphs, but keep any that an edge attaches to.
+    keep =
+      Enum.reduce((length(graph.groups) - 1)..0//-1, MapSet.new(), fn gi, keep ->
+        has_nodes = length(Map.get(direct_nodes, gi, [])) > 0
+
+        has_children =
+          Enum.any?(graph.groups, fn g -> g.parent == gi and MapSet.member?(keep, g.parent) end)
+
+        if has_nodes or has_children or MapSet.member?(referenced, gi) do
+          MapSet.put(keep, gi)
+        else
+          keep
+        end
+      end)
+
+    case build_scope(graph, nil, scope_edges, direct_nodes, keep) do
+      nil -> nil
+      canvas -> orient(canvas, graph)
+    end
+  end
+
+  defp build_scope(%GrokMermaid.Graph{} = graph, scope, scope_edges, direct_nodes, keep) do
+    items =
+      Enum.map(Map.get(direct_nodes, scope, []), &node_key/1) ++
+        (Enum.with_index(graph.groups)
+         |> Enum.filter(fn {g, gi} -> g.parent == scope and MapSet.member?(keep, gi) end)
+         |> Enum.map(fn {_, gi} -> group_key(gi) end))
+
+    if items == [] do
+      Canvas.new(1, 1)
+    else
+      index_of =
+        Enum.with_index(items)
+        |> Map.new(fn {item, i} -> {item, i} end)
+
+      {nodes, extras} =
+        Enum.reduce(items, {[], []}, fn item, {nodes, extras} ->
+          i = String.to_integer(String.slice(item, 1..-1//1))
+
+          if String.starts_with?(item, "n") do
+            {nodes ++
+               [%{label: Enum.at(graph.nodes, i).label, shape: Enum.at(graph.nodes, i).shape}],
+             extras ++ [%{kind: :plain}]}
+          else
+            case build_scope(graph, i, scope_edges, direct_nodes, keep) do
+              nil ->
+                {nodes, extras}
+
+              sub ->
+                {nodes ++ [%{label: Enum.at(graph.groups, i).label, shape: :rect}],
+                 extras ++ [%{kind: :frame, sub: sub}]}
+            end
+          end
+        end)
+
+      if length(nodes) != length(extras) do
+        nil
+      else
+        edges =
+          Enum.reduce(Map.get(scope_edges, scope, []), [], fn {f, t, ei}, edges ->
+            case {Map.get(index_of, f), Map.get(index_of, t)} do
+              {nil, _} ->
+                edges
+
+              {_, nil} ->
+                edges
+
+              {fi, ti} ->
+                e = Enum.at(graph.edges, ei)
+
+                edges ++
+                  [
+                    %{
+                      from: fi,
+                      to: ti,
+                      label: e.label,
+                      head_to: e.head_to,
+                      head_from: e.head_from,
+                      line: e.line
+                    }
+                  ]
+            end
+          end)
+
+        synth = %GrokMermaid.Graph{graph | nodes: nodes, edges: edges}
+        layout_canvas(synth, extras)
+      end
+    end
+  end
+
   @doc "Class and ER diagrams: boxes divided into title / attribute / method rows."
   @spec layout_class(GrokMermaid.Graph.t(), [GrokMermaid.Graph.class_info()]) :: Canvas.t() | nil
   def layout_class(graph, infos) do
     extras =
       Enum.with_index(graph.nodes)
       |> Enum.map(fn {node, i} ->
+        info = Enum.at(infos, i)
+
         title =
-          if infos[i].annotation != nil do
-            ["«#{infos[i].annotation}»"]
+          if info.annotation != nil do
+            ["«#{info.annotation}»"]
           else
             []
           end
 
         %{
           kind: :compartments,
-          sections: [title ++ [display_generics(node.label)], infos[i].attrs, infos[i].methods]
+          sections: [title ++ [Labels.display_generics(node.label)], info.attrs, info.methods]
         }
       end)
 
     canvas = layout_canvas(graph, extras)
     if canvas, do: orient(canvas, graph), else: nil
-  end
-
-  @doc "Mermaid writes generics as `List~T~`; show them as `List<T>`."
-  @spec display_generics(String.t()) :: String.t()
-  def display_generics(s) do
-    s
-    |> String.graphemes()
-    |> Enum.reduce({"", false}, fn c, {out, open} ->
-      if c == "~" do
-        {out <> if(open, do: ">", else: "<"), not open}
-      else
-        {out <> c, open}
-      end
-    end)
-    |> elem(0)
   end
 
   # ------------------------------------------------------------------- drawing
@@ -964,14 +1105,14 @@ defmodule GrokMermaid.Layout do
         if first do
           {canvas, row}
         else
+          canvas = Canvas.set(canvas, p.x, row, "├", :border)
+
           canvas =
-            canvas
-            |> Canvas.set(p.x, row, "├", :border)
-            |> Enum.reduce((p.x + 1)..(p.x + p.w - 2)//1, fn x, canvas ->
+            Enum.reduce((p.x + 1)..(p.x + p.w - 2)//1, canvas, fn x, canvas ->
               Canvas.set(canvas, x, row, "─", :border)
             end)
-            |> Canvas.set(p.x + p.w - 1, row, "┤", :border)
 
+          canvas = Canvas.set(canvas, p.x + p.w - 1, row, "┤", :border)
           {canvas, row + 1}
         end
 
@@ -1068,9 +1209,14 @@ defmodule GrokMermaid.Layout do
         |> Canvas.junction(exit_x, bottom, 2)
         |> Canvas.set(exit_x, bottom + 1, v, :edge)
         |> Canvas.set(exit_x, bottom + 2, bl, :edge)
-        |> Enum.reduce((exit_x + 1)..(ret_x - 1)//1, fn x, canvas ->
+
+      canvas =
+        Enum.reduce((exit_x + 1)..(ret_x - 1)//1, canvas, fn x, canvas ->
           Canvas.set(canvas, x, bottom + 2, h, :edge)
         end)
+
+      canvas =
+        canvas
         |> Canvas.set(ret_x, bottom + 2, br, :edge)
         |> Canvas.set(ret_x, bottom + 1, head_glyph(edge.head_to, "▲"), :edge)
 
