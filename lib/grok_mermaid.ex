@@ -25,7 +25,7 @@ defmodule GrokMermaid do
   advisory only, never a reason to withhold the art.
   """
 
-  alias GrokMermaid.{Canvas, Labels, Layout, LayoutSeq, Parse}
+  alias GrokMermaid.{Canvas, GitGraph, Labels, Layout, LayoutSeq, Mindmap, Parse, Pie, Timeline}
 
   @doc """
   Renders a Mermaid source to Unicode art.
@@ -119,6 +119,18 @@ defmodule GrokMermaid do
           nil -> nil
           seq -> draw_sequence(seq)
         end
+
+      :pie ->
+        Pie.render(src)
+
+      :mindmap ->
+        Mindmap.render(src)
+
+      :timeline ->
+        Timeline.render(src)
+
+      :gitgraph ->
+        GitGraph.render(src)
 
       nil ->
         nil

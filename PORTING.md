@@ -17,6 +17,10 @@ Elixir port of the terminal Mermaid renderer. Two reference implementations:
 | `graph.ts` | `GrokMermaid.Graph` | Shared model + caps (`MAX_NODES=128`, `MAX_EDGES=512`, …) |
 | `labels.ts` | `GrokMermaid.Labels` | ANSI stripping, `asciiUpper`, label helpers |
 | `parse.ts` | `GrokMermaid.Parse` | `flowchart`/`state`/`class`/`er`/`sequence` grammars |
+| `diagrams/pie.ts` | `GrokMermaid.Pie` | Bar-list proportions |
+| `diagrams/mindmap.ts` | `GrokMermaid.Mindmap` | Indentation tree |
+| `diagrams/timeline.ts` | `GrokMermaid.Timeline` | Periods and events |
+| `diagrams/gitgraph.ts` | `GrokMermaid.GitGraph` | Commit lanes |
 | `layout.ts` | `GrokMermaid.Layout` | Flowchart (incl. `subgraph`), class, ER layout |
 | `layout-seq.ts` | `GrokMermaid.LayoutSeq` | Sequence diagram layout |
 | `ansi.ts` | `GrokMermaid.Ansi` | `Cls` → ANSI theme mapping |
@@ -49,8 +53,8 @@ line, so streaming sources stay on screen).
 5. **Entry**: `render`, warnings, retry-without-last-line, `SourceBox`,
    `Ansi`; then rewire `pie_tui` to depend on this package.
 
-Golden outputs for tests are produced by the TS reference (`node` scripts in
-`test/support/golden/`) and checked in.
+Golden outputs for tests are produced by the TS reference (lovely-mermaid's
+`test/cases/` corpus) and inlined into `test/diagram_test.exs`.
 
 ## Rust cross-reference
 

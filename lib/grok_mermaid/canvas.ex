@@ -128,6 +128,15 @@ defmodule GrokMermaid.Canvas do
     %__MODULE__{w: w, h: h}
   end
 
+  @doc "Direction bit: up. Combine with `Bitwise.bor/2` for glyph resolution."
+  def bit_u, do: @u
+  @doc "Direction bit: down."
+  def bit_d, do: @d
+  @doc "Direction bit: left."
+  def bit_l, do: @l
+  @doc "Direction bit: right."
+  def bit_r, do: @r
+
   @doc "Line style constants for `cur_style`."
   def style_dot, do: @sty_dot
   def style_thick, do: @sty_thick

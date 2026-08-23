@@ -55,16 +55,55 @@ defmodule GrokMermaid.Parse do
   @doc "Split source into statements, honouring `;` and `%%` comments."
   @spec statements_of(String.t()) :: [String.t()]
   def statements_of(src) do
-    src
-    |> Labels.src_lines()
+    lines = Labels.src_lines(src)
+
+    lines
+    |> Enum.drop(frontmatter_end(lines))
     |> Enum.flat_map(&split_statements/1)
+  end
+
+  @doc """
+  Index just past a leading YAML frontmatter block (`---` … `---`), or 0
+  when there is none. While the block is still unterminated everything is
+  frontmatter, so a streamed diagram stays blank until it closes.
+  """
+  @spec frontmatter_end([String.t()]) :: non_neg_integer()
+  def frontmatter_end(lines) do
+    i = Enum.find_index(lines, &(String.trim(&1) != "")) || length(lines)
+
+    if i < length(lines) and String.trim(Enum.at(lines, i)) == "---" do
+      i + 1 +
+        (Enum.find_index(Enum.drop(lines, i + 1), &(String.trim(&1) == "---")) || length(lines))
+    else
+      0
+    end
+  end
+
+  @doc """
+  Mask of characters inside double quotes, for splitters that must not
+  cut quoted spans.
+  """
+  @spec quote_mask([String.t()]) :: [boolean()]
+  def quote_mask(chars) do
+    {mask, _in_quotes} =
+      Enum.reduce(chars, {[], false}, fn c, {mask, in_quotes} ->
+        if c == "\"" do
+          {mask ++ [true], not in_quotes}
+        else
+          {mask ++ [in_quotes], in_quotes}
+        end
+      end)
+
+    mask
   end
 
   defp first_word(s), do: s |> String.split(~r/\s+/, trim: true) |> List.first() || ""
 
   defp words(s), do: String.split(s, ~r/\s+/, trim: true)
 
-  defp header_kind(statements) do
+  @doc "Lowercased header word of the first statement, if it names a known diagram."
+  @spec header_kind([String.t()]) :: String.t() | nil
+  def header_kind(statements) do
     case List.first(statements) do
       nil ->
         nil
@@ -79,7 +118,12 @@ defmodule GrokMermaid.Parse do
              "statediagram-v2",
              "statediagram",
              "classdiagram",
-             "erdiagram"
+             "erdiagram",
+             "pie",
+             "mindmap",
+             "timeline",
+             "gitgraph",
+             "gitgraph:"
            ] do
           word
         else
@@ -89,7 +133,17 @@ defmodule GrokMermaid.Parse do
   end
 
   @doc "What kind of diagram the source declares, or `nil`."
-  @spec diagram_kind(String.t()) :: :flowchart | :state | :class | :er | :sequence | nil
+  @spec diagram_kind(String.t()) ::
+          :flowchart
+          | :state
+          | :class
+          | :er
+          | :sequence
+          | :pie
+          | :mindmap
+          | :timeline
+          | :gitgraph
+          | nil
   def diagram_kind(src) do
     case header_kind(statements_of(src)) do
       w when w in ["graph", "flowchart"] -> :flowchart
@@ -97,6 +151,10 @@ defmodule GrokMermaid.Parse do
       w when w in ["statediagram-v2", "statediagram"] -> :state
       "classdiagram" -> :class
       "erdiagram" -> :er
+      "pie" -> :pie
+      "mindmap" -> :mindmap
+      "timeline" -> :timeline
+      w when w in ["gitgraph", "gitgraph:"] -> :gitgraph
       _ -> nil
     end
   end
