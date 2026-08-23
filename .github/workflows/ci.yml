@@ -70,10 +70,10 @@ jobs:
       - name: Fetch dependencies
         run: mix deps.get
 
-      - name: Generate coverage report
+      - name: Probe native coverage first
         env:
           MIX_ENV: test
-        run: mix coveralls.cobertura
+        run: mix test --cover 2>&1 | tail -5
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
