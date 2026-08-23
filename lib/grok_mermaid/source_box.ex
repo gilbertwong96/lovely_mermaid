@@ -5,7 +5,7 @@ defmodule GrokMermaid.SourceBox do
   too wide for the space at hand.
   """
 
-  alias GrokMermaid.{Labels, Width}
+  alias GrokMermaid.{Labels, Span, Width}
 
   defp sat(a, b), do: max(0, a - b)
 
@@ -47,9 +47,9 @@ defmodule GrokMermaid.SourceBox do
 
     styled = [
       [
-        %{text: "╭", role: :border},
-        %{text: title, role: :title},
-        %{text: rule <> "╮", role: :border}
+        %Span{text: "╭", role: :border},
+        %Span{text: title, role: :title},
+        %Span{text: rule <> "╮", role: :border}
       ]
     ]
 
@@ -61,9 +61,9 @@ defmodule GrokMermaid.SourceBox do
         styled =
           [
             [
-              %{text: "│ ", role: :border},
-              %{text: line, role: :text},
-              %{text: IO.iodata_to_binary([pad, " │"]), role: :border}
+              %Span{text: "│ ", role: :border},
+              %Span{text: line, role: :text},
+              %Span{text: IO.iodata_to_binary([pad, " │"]), role: :border}
             ]
             | styled
           ]
@@ -73,7 +73,7 @@ defmodule GrokMermaid.SourceBox do
 
     bottom = "╰" <> String.duplicate("-", inner) <> "╯"
     plain = Enum.reverse(plain, [bottom])
-    styled = Enum.reverse(styled, [[%{text: bottom, role: :border}]])
+    styled = Enum.reverse(styled, [[%Span{text: bottom, role: :border}]])
 
     %{plain: plain, styled: styled, width: inner + 2, class_defs: %{}, warnings: []}
   end

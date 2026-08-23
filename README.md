@@ -27,10 +27,11 @@ end
 | `GrokMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())` | ANSI-coloured lines from `art.styled` |
 | `GrokMermaid.ClassStyle.resolve_class_style(classes, class_defs)` | Merged `classDef` style for a span, or `nil` |
 
-Each `span` in `styled` is a map `%{text, role}` with optional `classes`
-(author-assigned names from `:::name` / `class A,B name`) and `href` (a
-`click`/`link` target). `to_ansi/2` styles classed spans from `art.class_defs`
-(best effort) and wraps linked spans in OSC 8 hyperlinks.
+Each `span` in `styled` is a `GrokMermaid.Span` — `%Span{text, role}`
+with `classes` (author-assigned names from `:::name` / `class A,B name`)
+and `href` (a `click`/`link` target), both `nil` when the node had
+neither. `to_ansi/2` styles classed spans from `art.class_defs` (best
+effort) and wraps linked spans in OSC 8 hyperlinks.
 
 A YAML frontmatter `title:` is drawn centred above the art in the `title`
 role.

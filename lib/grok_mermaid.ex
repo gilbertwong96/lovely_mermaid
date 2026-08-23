@@ -27,6 +27,7 @@ defmodule GrokMermaid do
 
   alias GrokMermaid.{
     Canvas,
+    Span,
     GitGraph,
     Labels,
     Layout,
@@ -41,7 +42,7 @@ defmodule GrokMermaid do
   @doc """
   Renders a Mermaid source to Unicode art.
 
-  Returns `%{plain: [String.t()], styled: [[map()]], width: non_neg_integer(), class_defs: map(), warnings: [String.t()]}`
+  Returns `%{plain: [String.t()], styled: [[Span.t()]], width: non_neg_integer(), class_defs: map(), warnings: [String.t()]}`
   or `nil` when there is nothing to draw.
   """
   @spec render(String.t()) :: map() | nil
@@ -91,8 +92,8 @@ defmodule GrokMermaid do
             plain: [pad <> title, "" | art.plain],
             styled: [
               if(pad == "",
-                do: [%{text: title, role: :title}],
-                else: [%{text: pad, role: :none}, %{text: title, role: :title}]
+                do: [%Span{text: title, role: :title}],
+                else: [%Span{text: pad, role: :none}, %Span{text: title, role: :title}]
               ),
               []
               | art.styled

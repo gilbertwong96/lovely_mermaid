@@ -76,7 +76,7 @@ defmodule GrokMermaid.Ansi do
     Enum.map(art.styled, fn row ->
       Enum.map_join(row, fn span ->
         text = span.text
-        cls = ClassStyle.resolve_class_style(Map.get(span, :classes), class_defs)
+        cls = ClassStyle.resolve_class_style(span.classes, class_defs)
 
         sgr =
           if cls != nil,
@@ -85,7 +85,7 @@ defmodule GrokMermaid.Ansi do
 
         colored = if sgr == nil, do: text, else: "\e[#{sgr}m#{text}\e[0m"
 
-        case Map.get(span, :href) do
+        case span.href do
           nil -> colored
           href -> "#{@osc8}#{href}#{@st}#{colored}#{@osc8}#{@st}"
         end

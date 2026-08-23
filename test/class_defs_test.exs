@@ -21,13 +21,13 @@ defmodule GrokMermaid.ClassDefTest do
              "cold" => %{"fill" => "#69f"}
            }
 
-    classed = art.styled |> List.flatten() |> Enum.filter(&Map.has_key?(&1, :classes))
+    classed = art.styled |> List.flatten() |> Enum.filter(&(&1.classes != nil))
 
     assert Enum.any?(classed, fn s -> s.text =~ "Hot node" and s.classes == ["hot"] end)
     assert Enum.any?(classed, fn s -> s.text =~ "B" and s.classes == ["cold"] end)
     # Cells the node did not paint carry no classes.
     refute Enum.any?(art.styled |> List.flatten(), fn s ->
-             s.role == :edge and Map.has_key?(s, :classes)
+             s.role == :edge and s.classes != nil
            end)
   end
 
@@ -76,7 +76,7 @@ defmodule GrokMermaid.ClassDefTest do
   test "a frontmatter title carries the title role" do
     art = GrokMermaid.render("---\ntitle: Order flow\n---\nflowchart TD\n A --> B")
     assert hd(art.plain) == "Order flow"
-    assert List.first(art.styled) == [%{text: "Order flow", role: :title}]
+    assert List.first(art.styled) == [%GrokMermaid.Span{text: "Order flow", role: :title}]
   end
 
   test "click and link statements land on the spans as href" do
@@ -95,7 +95,7 @@ defmodule GrokMermaid.ClassDefTest do
            end)
 
     refute Enum.any?(fc.styled |> List.flatten(), fn s ->
-             s.text =~ "B" and Map.has_key?(s, :href)
+             s.text =~ "B" and s.href != nil
            end)
 
     cls =
@@ -109,7 +109,7 @@ defmodule GrokMermaid.ClassDefTest do
 
     # Callback forms carry nothing a terminal can open.
     cb = GrokMermaid.render("flowchart TD\n A --> B\n click A call doIt() \"tip\"")
-    refute Enum.any?(cb.styled |> List.flatten(), fn s -> Map.has_key?(s, :href) end)
+    refute Enum.any?(cb.styled |> List.flatten(), fn s -> s.href != nil end)
   end
 
   test "toAnsi wraps linked spans in OSC 8, stripping back to plain" do

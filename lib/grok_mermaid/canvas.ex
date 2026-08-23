@@ -9,7 +9,7 @@ defmodule GrokMermaid.Canvas do
   not overwrite.
   """
 
-  alias GrokMermaid.Width
+  alias GrokMermaid.{Span, Width}
 
   # Sentinel occupying the trailing column of a wide glyph. Never emitted:
   # the line builder skips it, so a CJK character claims two cells of
@@ -434,16 +434,16 @@ defmodule GrokMermaid.Canvas do
     {plain, Enum.reverse(spans)}
   end
 
-  defp span(text, role, nil, nil), do: %{text: text, role: role}
+  defp span(text, role, nil, nil), do: %Span{text: text, role: role}
 
   defp span(text, role, tag, nil) do
-    %{text: text, role: role, classes: String.split(tag, " ")}
+    %Span{text: text, role: role, classes: String.split(tag, " ")}
   end
 
-  defp span(text, role, nil, href), do: %{text: text, role: role, href: href}
+  defp span(text, role, nil, href), do: %Span{text: text, role: role, href: href}
 
   defp span(text, role, tag, href) do
-    %{text: text, role: role, classes: String.split(tag, " "), href: href}
+    %Span{text: text, role: role, classes: String.split(tag, " "), href: href}
   end
 
   defp drop_blank(rows) do
