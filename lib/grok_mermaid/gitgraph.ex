@@ -11,12 +11,25 @@ defmodule GrokMermaid.GitGraph do
 
   alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
 
+  defmodule Commit do
+    @moduledoc false
+    defstruct [:lane, :id, :tag, :merge_from]
+
+    @type t :: %__MODULE__{
+            lane: non_neg_integer(),
+            id: String.t(),
+            tag: String.t() | nil,
+            merge_from: non_neg_integer() | nil
+          }
+  end
+
   @doc "Render a `gitGraph` source to a canvas, or `nil` when nothing parses."
   @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
   def render(src) do
     case parse(src) do
       {:ok, branches, commits, fork_at, warnings} ->
-        lane_count = length(branches)
+        lane_count = tuple_size(branches)
+        commits_t = List.to_tuple(commits)
 
         # The newest commit of each lane wears the branch name.
         head_of = Map.new(Enum.with_index(commits), fn {c, i} -> {c.lane, i} end)
@@ -29,7 +42,7 @@ defmodule GrokMermaid.GitGraph do
         labels =
           Enum.map(rows, fn
             %{kind: :commit, at: at} ->
-              c = Enum.at(commits, at)
+              c = elem(commits_t, at)
 
               parts =
                 if c.id == "" do
@@ -40,21 +53,23 @@ defmodule GrokMermaid.GitGraph do
 
               parts =
                 if Map.get(head_of, c.lane) == at,
-                  do: parts ++ [{"(#{Enum.at(branches, c.lane)})", :edge_label}],
+                  do: [{"(#{elem(branches, c.lane)})", :edge_label} | parts],
                   else: parts
 
-              parts = if c.tag != nil, do: parts ++ [{"[#{c.tag}]", :edge_label}], else: parts
+              parts = if c.tag != nil, do: [{"[#{c.tag}]", :edge_label} | parts], else: parts
 
               parts =
                 if c.merge_from != nil,
-                  do: parts ++ [{"⇐ #{Enum.at(branches, c.merge_from)}", :edge_label}],
+                  do: [{"⇐ #{elem(branches, c.merge_from)}", :edge_label} | parts],
                   else: parts
 
-              parts
+              Enum.reverse(parts)
 
             _ ->
               nil
           end)
+
+        labels_t = List.to_tuple(labels)
 
         width =
           graph_w +
@@ -74,10 +89,10 @@ defmodule GrokMermaid.GitGraph do
         canvas = Canvas.new(width, length(rows))
 
         {canvas, _live} =
-          Enum.reduce(Enum.with_index(rows), {canvas, MapSet.new()}, fn {row, y},
-                                                                        {canvas, live} ->
+          Enum.reduce(Stream.with_index(rows), {canvas, MapSet.new()}, fn {row, y},
+                                                                          {canvas, live} ->
             if row.kind == :commit do
-              c = Enum.at(commits, row.at)
+              c = elem(commits_t, row.at)
               live = MapSet.put(live, c.lane)
 
               canvas =
@@ -97,8 +112,8 @@ defmodule GrokMermaid.GitGraph do
               canvas = Canvas.set(canvas, lane_x.(c.lane), y, "●", :edge)
 
               {canvas, _x} =
-                Enum.reduce(labels |> Enum.at(y) || [], {canvas, graph_w}, fn {text, role},
-                                                                              {canvas, x} ->
+                Enum.reduce(at(labels_t, y) || [], {canvas, graph_w}, fn {text, role},
+                                                                         {canvas, x} ->
                   canvas = Canvas.draw_text(canvas, text, x, y, role)
                   {canvas, x + Width.string_width(text) + 1}
                 end)
@@ -173,7 +188,7 @@ defmodule GrokMermaid.GitGraph do
 
   @doc false
   @spec parse(String.t()) ::
-          {:ok, [String.t()], [map()], [integer() | nil], [String.t()]} | :error
+          {:ok, tuple(), [Commit.t()], tuple(), [String.t()]} | :error
   def parse(src) do
     statements = Parse.statements_of(src)
     kind = Parse.header_kind(statements)
@@ -181,10 +196,10 @@ defmodule GrokMermaid.GitGraph do
     if kind == nil or kind not in ["gitgraph", "gitgraph:"] do
       :error
     else
-      branches = ["main"]
-      fork_at = [nil]
+      branches = {"main"}
+      fork_at = {nil}
       commits = []
-      heads = [nil]
+      heads = {nil}
       cur = 0
       auto = 0
 
@@ -207,71 +222,83 @@ defmodule GrokMermaid.GitGraph do
               case first do
                 "commit" ->
                   attrs = commit_attrs(rest)
-                  heads = List.replace_at(heads, cur, length(commits))
+                  heads = put_elem(heads, cur, length(commits))
 
-                  commits =
-                    commits ++
-                      [%{lane: cur, id: attrs.id || "c#{auto}", tag: attrs.tag, merge_from: nil}]
+                  commits = [
+                    %Commit{
+                      lane: cur,
+                      id: attrs.id || "c#{auto}",
+                      tag: attrs.tag,
+                      merge_from: nil
+                    }
+                    | commits
+                  ]
 
                   auto = auto + if(attrs.id == nil, do: 1, else: 0)
                   {branches, fork_at, commits, heads, cur, auto, warnings, false}
 
                 "branch" ->
                   {name, _after} = name_token(rest)
-                  fork = Enum.at(heads, cur) || Enum.at(fork_at, cur)
+                  fork = elem(heads, cur) || elem(fork_at, cur)
 
-                  if name == nil or name in branches or fork == nil do
+                  if name == nil or name in Tuple.to_list(branches) or fork == nil do
                     {branches, fork_at, commits, heads, cur, auto,
-                     warnings ++ ["dropped, unreadable statement: \"#{st}\""], false}
+                     ["dropped, unreadable statement: \"#{st}\"" | warnings], false}
                   else
-                    branches = branches ++ [name]
-                    fork_at = fork_at ++ [fork]
-                    heads = heads ++ [nil]
+                    branches = :erlang.append_element(branches, name)
+                    fork_at = :erlang.append_element(fork_at, fork)
+                    heads = :erlang.append_element(heads, nil)
 
-                    {branches, fork_at, commits, heads, length(branches) - 1, auto, warnings,
+                    {branches, fork_at, commits, heads, tuple_size(branches) - 1, auto, warnings,
                      false}
                   end
 
                 first when first in ["checkout", "switch"] ->
                   {name, _after} = name_token(rest)
-                  lane = Enum.find_index(branches, &(&1 == name))
+                  lane = branches |> Tuple.to_list() |> Enum.find_index(&(&1 == name))
 
                   if lane == nil do
                     {branches, fork_at, commits, heads, cur, auto,
-                     warnings ++ ["dropped, unreadable statement: \"#{st}\""], false}
+                     ["dropped, unreadable statement: \"#{st}\"" | warnings], false}
                   else
                     {branches, fork_at, commits, heads, lane, auto, warnings, false}
                   end
 
                 "merge" ->
                   {name, rest_after} = name_token(rest)
-                  lane = Enum.find_index(branches, &(&1 == name))
+                  lane = branches |> Tuple.to_list() |> Enum.find_index(&(&1 == name))
 
                   if lane == nil or lane == cur do
                     {branches, fork_at, commits, heads, cur, auto,
-                     warnings ++ ["dropped, unreadable statement: \"#{st}\""], false}
+                     ["dropped, unreadable statement: \"#{st}\"" | warnings], false}
                   else
                     attrs = commit_attrs(rest_after)
-                    heads = List.replace_at(heads, cur, length(commits))
+                    heads = put_elem(heads, cur, length(commits))
 
                     commits =
-                      commits ++
-                        [%{lane: cur, id: attrs.id || "", tag: attrs.tag, merge_from: lane}]
+                      [
+                        %Commit{lane: cur, id: attrs.id || "", tag: attrs.tag, merge_from: lane}
+                        | commits
+                      ]
 
                     {branches, fork_at, commits, heads, cur, auto, warnings, false}
                   end
 
                 "cherry-pick" ->
                   attrs = commit_attrs(rest)
-                  heads = List.replace_at(heads, cur, length(commits))
+                  heads = put_elem(heads, cur, length(commits))
                   id = if attrs.id == nil, do: "c#{auto}", else: "⟲ #{attrs.id}"
-                  commits = commits ++ [%{lane: cur, id: id, tag: attrs.tag, merge_from: nil}]
+
+                  commits = [
+                    %Commit{lane: cur, id: id, tag: attrs.tag, merge_from: nil} | commits
+                  ]
+
                   auto = auto + if(attrs.id == nil, do: 1, else: 0)
                   {branches, fork_at, commits, heads, cur, auto, warnings, false}
 
                 _ ->
                   {branches, fork_at, commits, heads, cur, auto,
-                   warnings ++ ["dropped, unreadable statement: \"#{st}\""], false}
+                   ["dropped, unreadable statement: \"#{st}\"" | warnings], false}
               end
             end
           end
@@ -279,13 +306,13 @@ defmodule GrokMermaid.GitGraph do
 
       warnings =
         if truncated,
-          do: warnings ++ ["diagram truncated: commit cap (#{Graph.max_edges()}) reached"],
+          do: ["diagram truncated: commit cap (#{Graph.max_edges()}) reached" | warnings],
           else: warnings
 
       if commits == [] do
         :error
       else
-        {:ok, branches, commits, fork_at, warnings}
+        {:ok, branches, Enum.reverse(commits), fork_at, Enum.reverse(warnings)}
       end
     end
   end
@@ -294,29 +321,38 @@ defmodule GrokMermaid.GitGraph do
   # `open` hangs a merged lane off its merge commit, `close` returns a
   # forked lane to its parent at its fork point. Lanes never used (a branch
   # with no commits that nothing merged) simply never open.
+  defp at(t, i) when is_tuple(t) and i >= 0 and i < tuple_size(t), do: elem(t, i)
+  defp at(_t, _i), do: nil
+
   defp build_rows(commits, branches, fork_at) do
+    commits_t = List.to_tuple(commits)
+
     used =
-      Enum.map(Enum.with_index(branches), fn {_b, lane} ->
+      branches
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.map(fn {_b, lane} ->
         Enum.any?(commits, fn c -> c.lane == lane or c.merge_from == lane end) or lane == 0
       end)
+      |> List.to_tuple()
 
     {rows, _} =
       Enum.reduce((length(commits) - 1)..0//-1, {[], used}, fn i, {rows, used} ->
-        c = Enum.at(commits, i)
-        rows = rows ++ [%{kind: :commit, at: i}]
+        c = elem(commits_t, i)
+        rows = [%{kind: :commit, at: i} | rows]
 
         rows =
           if c.merge_from != nil do
-            rows ++ [%{kind: :open, parent: c.lane, lane: c.merge_from}]
+            [%{kind: :open, parent: c.lane, lane: c.merge_from} | rows]
           else
             rows
           end
 
         # Close outer lanes first so an inner close still sees them as columns.
         {rows, _used} =
-          Enum.reduce((length(branches) - 1)..1//-1, {rows, used}, fn lane, {rows, used} ->
-            if Enum.at(fork_at, lane) == i - 1 and Enum.at(used, lane) do
-              {rows ++ [%{kind: :close, parent: Enum.at(commits, i - 1).lane, lane: lane}], used}
+          Enum.reduce((tuple_size(branches) - 1)..1//-1, {rows, used}, fn lane, {rows, used} ->
+            if elem(fork_at, lane) == i - 1 and elem(used, lane) do
+              {[%{kind: :close, parent: elem(commits_t, i - 1).lane, lane: lane} | rows], used}
             else
               {rows, used}
             end
@@ -325,7 +361,7 @@ defmodule GrokMermaid.GitGraph do
         {rows, used}
       end)
 
-    rows
+    Enum.reverse(rows)
   end
 
   @doc false

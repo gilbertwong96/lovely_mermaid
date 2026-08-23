@@ -1,4 +1,14 @@
 defmodule GrokMermaid.Parse do
+  defmodule Shaped do
+    @moduledoc false
+    defstruct [:shape, :label, :after, :unclosed]
+  end
+
+  defmodule Link do
+    @moduledoc false
+    defstruct [:label, :left, :line, :next, :right]
+  end
+
   @moduledoc """
   Source text to diagram model, ported from grok-mermaid's parse.ts.
 
@@ -22,33 +32,31 @@ defmodule GrokMermaid.Parse do
   """
   @spec split_statements(String.t()) :: [String.t()]
   def split_statements(line) do
-    chars = String.graphemes(line)
-    scan_statements(chars, 0, [], "", false)
+    line |> String.graphemes() |> scan_statements([], "", false)
   end
 
-  defp scan_statements(chars, i, out, cur, _in_quotes) when i >= length(chars) do
-    flush_statement(cur, out)
-  end
+  defp scan_statements([], out, cur, _in_quotes), do: flush_statement(cur, out)
 
-  defp scan_statements(chars, i, out, cur, in_quotes) do
-    c = Enum.at(chars, i)
-
+  defp scan_statements([c | rest], out, cur, in_quotes) do
     cond do
       in_quotes ->
         in_quotes = c != "\""
-        scan_statements(chars, i + 1, out, cur <> c, in_quotes)
+        scan_statements(rest, out, cur <> c, in_quotes)
 
       c == "\"" ->
-        scan_statements(chars, i + 1, out, cur <> c, true)
+        scan_statements(rest, out, cur <> c, true)
 
-      c == "%" and Enum.at(chars, i + 1) == "%" ->
-        flush_statement(cur, out)
+      c == "%" ->
+        case rest do
+          ["%" | _rest2] -> flush_statement(cur, out)
+          _ -> scan_statements(rest, out, cur <> c, false)
+        end
 
       c == ";" ->
-        scan_statements(chars, i + 1, flush_statement(cur, out), "", false)
+        scan_statements(rest, flush_statement(cur, out), "", false)
 
       true ->
-        scan_statements(chars, i + 1, out, cur <> c, false)
+        scan_statements(rest, out, cur <> c, false)
     end
   end
 
@@ -92,13 +100,26 @@ defmodule GrokMermaid.Parse do
     {mask, _in_quotes} =
       Enum.reduce(chars, {[], false}, fn c, {mask, in_quotes} ->
         if c == "\"" do
-          {mask ++ [true], not in_quotes}
+          {[true | mask], not in_quotes}
         else
-          {mask ++ [in_quotes], in_quotes}
+          {[in_quotes | mask], in_quotes}
         end
       end)
 
-    mask
+    Enum.reverse(mask)
+  end
+
+  defp at(t, i) when is_tuple(t) and i >= 0 and i < tuple_size(t), do: elem(t, i)
+  defp at(_t, _i), do: nil
+
+  defp slice_join(t, start, len) do
+    for(i <- start..(start + len - 1)//1, i >= 0 and i < tuple_size(t), do: elem(t, i))
+    |> IO.iodata_to_binary()
+  end
+
+  defp slice_tail_join(t, start) do
+    for(i <- start..(tuple_size(t) - 1)//1, do: elem(t, i))
+    |> IO.iodata_to_binary()
   end
 
   defp first_word(s), do: s |> String.split(~r/\s+/, trim: true) |> List.first() || ""
@@ -111,27 +132,30 @@ defmodule GrokMermaid.Parse do
   """
   @spec split_colon(String.t()) :: {String.t(), String.t()} | nil
   def split_colon(s) do
-    chars = String.graphemes(s)
-    scan_colon(chars, 0)
+    s |> String.graphemes() |> scan_colon([])
   end
 
-  defp scan_colon(chars, i) when i >= length(chars), do: nil
+  defp scan_colon([], _acc), do: nil
 
-  defp scan_colon(chars, i) do
-    if Enum.at(chars, i) != ":" do
-      scan_colon(chars, i + 1)
+  defp scan_colon([c | rest], acc) do
+    if c != ":" do
+      scan_colon(rest, [c | acc])
     else
-      run =
-        Enum.reduce_while(i..(length(chars) - 1)//1, i, fn _, acc ->
-          if Enum.at(chars, acc) == ":", do: {:cont, acc + 1}, else: {:halt, acc}
-        end)
+      {run, rest2} = count_colons(rest, 1)
 
-      if run - i >= 3 do
+      if run >= 3 do
         # A `:::` tag run is not a label colon; skip past the whole run.
-        scan_colon(chars, run)
+        scan_colon(rest2, acc)
       else
-        {Enum.take(chars, i) |> Enum.join(), Enum.drop(chars, run) |> Enum.join()}
+        {acc |> Enum.reverse() |> IO.iodata_to_binary(), IO.iodata_to_binary(rest2)}
       end
+    end
+  end
+
+  defp count_colons(chars, n) do
+    case chars do
+      [":" | rest] -> count_colons(rest, n + 1)
+      _ -> {n, chars}
     end
   end
 
@@ -311,29 +335,30 @@ defmodule GrokMermaid.Parse do
         cond do
           in_quotes ->
             if c == "\"",
-              do: {out, cur ++ [c], depth, false},
-              else: {out, cur ++ [c], depth, true}
+              do: {out, [c | cur], depth, false},
+              else: {out, [c | cur], depth, true}
 
           c == "\"" ->
-            {out, cur ++ [c], depth, true}
+            {out, [c | cur], depth, true}
 
           c in ["(", "["] ->
-            {out, cur ++ [c], depth + 1, false}
+            {out, [c | cur], depth + 1, false}
 
           c in [")", "]"] ->
-            {out, cur ++ [c], max(depth - 1, 0), false}
+            {out, [c | cur], max(depth - 1, 0), false}
 
           is_sep.(c) and depth == 0 ->
-            seg = Enum.join(cur)
-            {if(seg != "", do: out ++ [seg], else: out), [], 0, false}
+            seg = cur |> Enum.reverse() |> IO.iodata_to_binary()
+            {if(seg != "", do: [seg | out], else: out), [], 0, false}
 
           true ->
-            {out, cur ++ [c], depth, false}
+            {out, [c | cur], depth, false}
         end
       end)
 
-    seg = Enum.join(cur)
-    if seg != "", do: out ++ [seg], else: out
+    seg = cur |> Enum.reverse() |> IO.iodata_to_binary()
+    out = if seg != "", do: [seg | out], else: out
+    Enum.reverse(out)
   end
 
   @doc "Lowercased header word of the first statement, if it names a known diagram."
@@ -417,13 +442,13 @@ defmodule GrokMermaid.Parse do
             "class" ->
               case parse_class_assign(st) do
                 nil -> {graph, assigns, hrefs}
-                assign -> {graph, assigns ++ [assign], hrefs}
+                assign -> {graph, [assign | assigns], hrefs}
               end
 
             "click" ->
               case parse_href(st) do
                 nil -> {graph, assigns, hrefs}
-                href -> {graph, assigns, hrefs ++ [href]}
+                href -> {graph, assigns, [href | hrefs]}
               end
 
             _ ->
@@ -431,7 +456,10 @@ defmodule GrokMermaid.Parse do
           end
         end)
 
-      graph = Graph.apply_hrefs(graph, hrefs) |> Graph.apply_classes(class_assigns)
+      graph =
+        Graph.apply_hrefs(graph, Enum.reverse(hrefs))
+        |> Graph.apply_classes(Enum.reverse(class_assigns))
+
       if graph.over_cap or graph.nodes == [], do: nil, else: graph
     end
   end
@@ -489,7 +517,7 @@ defmodule GrokMermaid.Parse do
         graph
 
       _ ->
-        chars = String.graphemes(st)
+        chars = st |> String.graphemes() |> List.to_tuple()
 
         case parse_node_group(chars, 0, graph) do
           {graph, nil} ->
@@ -520,12 +548,12 @@ defmodule GrokMermaid.Parse do
   defp parse_statement_links(chars, i, prev, graph, st) do
     i = skip_spaces(chars, i)
 
-    if i >= length(chars) do
+    if i >= tuple_size(chars) do
       graph
     else
       case parse_link(chars, i) do
         nil ->
-          rest = Enum.slice(chars, i..-1//1) |> Enum.join()
+          rest = slice_tail_join(chars, i)
           warn(graph, "dropped, expected a link: \"#{rest}\"")
 
         link ->
@@ -557,7 +585,7 @@ defmodule GrokMermaid.Parse do
       inner =
         Enum.reduce_while(target, {graph, true}, fn t, {graph, _} ->
           {graph, pushed} =
-            Graph.push_edge(graph, %{
+            Graph.push_edge(graph, %Graph.Edge{
               from: if(reversed, do: t, else: f),
               to: if(reversed, do: f, else: t),
               label: link.label,
@@ -577,7 +605,7 @@ defmodule GrokMermaid.Parse do
   end
 
   @doc "One or more nodes joined by `&`, which fan out into a cross product."
-  @spec parse_node_group([String.t()], non_neg_integer(), GrokMermaid.Graph.t()) ::
+  @spec parse_node_group(tuple(), non_neg_integer(), GrokMermaid.Graph.t()) ::
           {GrokMermaid.Graph.t(), {[non_neg_integer()], non_neg_integer()} | nil}
   def parse_node_group(chars, start, graph) do
     case parse_node(chars, start, graph) do
@@ -592,19 +620,19 @@ defmodule GrokMermaid.Parse do
   defp parse_group_links(chars, i, group, graph) do
     j = skip_spaces(chars, i)
 
-    if Enum.at(chars, j) != "&" do
-      {graph, {group, j}}
+    if at(chars, j) != "&" do
+      {graph, {Enum.reverse(group), j}}
     else
       case parse_node(chars, j + 1, graph) do
         {graph, nil} -> {graph, nil}
-        {graph, {index, next}} -> parse_group_links(chars, next, group ++ [index], graph)
+        {graph, {index, next}} -> parse_group_links(chars, next, [index | group], graph)
       end
     end
   end
 
   defp skip_spaces(chars, i) do
-    Enum.reduce_while(i..(length(chars) - 1)//1, i, fn _, acc ->
-      if Enum.at(chars, acc) in [" ", "\t"], do: {:cont, acc + 1}, else: {:halt, acc}
+    Enum.reduce_while(i..(tuple_size(chars) - 1)//1, i, fn _, acc ->
+      if at(chars, acc) in [" ", "\t"], do: {:cont, acc + 1}, else: {:halt, acc}
     end)
   end
 
@@ -613,19 +641,19 @@ defmodule GrokMermaid.Parse do
     id_start = i
 
     i =
-      Enum.reduce_while(i..(length(chars) - 1)//1, i, fn _, acc ->
-        c = Enum.at(chars, acc)
+      Enum.reduce_while(i..(tuple_size(chars) - 1)//1, i, fn _, acc ->
+        c = at(chars, acc)
         if c != nil and Labels.is_id_char(c), do: {:cont, acc + 1}, else: {:halt, acc}
       end)
 
     if i == id_start do
       {graph, nil}
     else
-      id = Enum.slice(chars, id_start, i - id_start) |> Enum.join()
+      id = slice_join(chars, id_start, i - id_start)
       shaped = read_shape_at(chars, i)
 
       graph =
-        if shaped[:unclosed] != nil do
+        if shaped.unclosed != nil do
           warn(graph, "node \"#{id}\": label is missing its closing `#{shaped.unclosed}`")
         else
           graph
@@ -639,13 +667,13 @@ defmodule GrokMermaid.Parse do
           # `id:::name` (after any shape) attaches an author class to the node.
           next = shaped.after
 
-          if Enum.at(chars, next) == ":" and Enum.at(chars, next + 1) == ":" and
-               Enum.at(chars, next + 2) == ":" do
+          if at(chars, next) == ":" and at(chars, next + 1) == ":" and
+               at(chars, next + 2) == ":" do
             k = next + 3
 
             k =
-              Enum.reduce_while(k..(length(chars) - 1)//1, k, fn _, acc ->
-                c = Enum.at(chars, acc)
+              Enum.reduce_while(k..(tuple_size(chars) - 1)//1, k, fn _, acc ->
+                c = at(chars, acc)
 
                 if c != nil and (Labels.is_id_char(c) or c == "-"),
                   do: {:cont, acc + 1},
@@ -656,7 +684,7 @@ defmodule GrokMermaid.Parse do
             k = while_ends_with_dash(chars, k, next + 3)
 
             if k > next + 3 do
-              name = Enum.slice(chars, next + 3, k - next - 3) |> Enum.join()
+              name = slice_join(chars, next + 3, k - next - 3)
               {Graph.add_class(graph, index, name), {index, k}}
             else
               {graph, {index, next}}
@@ -669,7 +697,7 @@ defmodule GrokMermaid.Parse do
   end
 
   defp while_ends_with_dash(chars, k, min) do
-    if k > min and Enum.at(chars, k - 1) == "-" do
+    if k > min and at(chars, k - 1) == "-" do
       while_ends_with_dash(chars, k - 1, min)
     else
       k
@@ -677,8 +705,8 @@ defmodule GrokMermaid.Parse do
   end
 
   defp read_shape_at(chars, i) do
-    c = Enum.at(chars, i)
-    n = Enum.at(chars, i + 1)
+    c = at(chars, i)
+    n = at(chars, i + 1)
 
     cond do
       c == "@" and n == "{" -> read_at_shape(chars, i + 2)
@@ -691,7 +719,7 @@ defmodule GrokMermaid.Parse do
       c == "{" and n == "{" -> read_shape(chars, i + 2, "}}", :diamond)
       c == "{" -> read_shape(chars, i + 1, "}", :diamond)
       c == ">" -> read_shape(chars, i + 1, "]", :rect)
-      true -> %{shape: :rect, label: nil, after: i}
+      true -> %Shaped{shape: :rect, label: nil, after: i}
     end
   end
 
@@ -762,17 +790,17 @@ defmodule GrokMermaid.Parse do
       end)
 
     if closed do
-      %{shape: shape, label: label, after: i + 1}
+      %Shaped{shape: shape, label: label, after: i + 1}
     else
-      %{shape: shape, label: label, after: length(chars), unclosed: "}"}
+      %{shape: shape, label: label, after: tuple_size(chars), unclosed: "}"}
     end
   end
 
   defp scan_at_shape(chars, i, text, depth, in_quotes) do
-    if i >= length(chars) do
+    if i >= tuple_size(chars) do
       {text, i, false}
     else
-      c = Enum.at(chars, i)
+      c = at(chars, i)
 
       cond do
         in_quotes and c == "\"" ->
@@ -800,16 +828,23 @@ defmodule GrokMermaid.Parse do
   # Split a v2 body on separators that sit outside quoted runs.
   defp split_at_top(body, sep) do
     {parts, cur, _} =
-      Enum.reduce(String.graphemes(body), {[], "", false}, fn c, {parts, cur, in_quotes} ->
+      Enum.reduce(String.graphemes(body), {[], [], false}, fn c, {parts, cur, in_quotes} ->
         cond do
-          in_quotes and c == "\"" -> {parts, cur <> c, false}
-          not in_quotes and c == "\"" -> {parts, cur <> c, true}
-          not in_quotes and c == sep -> {parts ++ [cur], "", false}
-          true -> {parts, cur <> c, in_quotes}
+          in_quotes and c == "\"" ->
+            {parts, [c | cur], false}
+
+          not in_quotes and c == "\"" ->
+            {parts, [c | cur], true}
+
+          not in_quotes and c == sep ->
+            {[cur |> Enum.reverse() |> IO.iodata_to_binary() | parts], [], false}
+
+          true ->
+            {parts, [c | cur], in_quotes}
         end
       end)
 
-    parts ++ [cur]
+    [cur |> Enum.reverse() |> IO.iodata_to_binary() | parts] |> Enum.reverse()
   end
 
   # Read label text up to `closer`. Quoting is decided by the first
@@ -817,29 +852,30 @@ defmodule GrokMermaid.Parse do
   # the quote closes, so `A["a] b"]` is one node.
   defp read_shape(chars, start, closer, shape) do
     j = skip_spaces(chars, start)
-    quoted = Enum.at(chars, j) == "\""
+    quoted = at(chars, j) == "\""
     closer_chars = String.graphemes(closer)
     {text, i, _} = scan_shape(chars, start, quoted, closer_chars, "", false)
 
-    if i < length(chars) do
-      %{shape: shape, label: Labels.clean_label(text), after: i + length(closer_chars)}
+    if i < tuple_size(chars) do
+      %Shaped{shape: shape, label: Labels.clean_label(text), after: i + length(closer_chars)}
     else
       # Ran off the end still looking for the closer.
-      %{shape: shape, label: Labels.clean_label(text), after: length(chars), unclosed: closer}
+      %{shape: shape, label: Labels.clean_label(text), after: tuple_size(chars), unclosed: closer}
     end
   end
 
   defp scan_shape(chars, i, quoted, closer_chars, text, in_quotes) do
-    if i >= length(chars) do
+    if i >= tuple_size(chars) do
       {text, i, in_quotes}
     else
-      c = Enum.at(chars, i)
+      c = at(chars, i)
 
       cond do
         quoted and c == "\"" ->
           scan_shape(chars, i + 1, quoted, closer_chars, text <> c, not in_quotes)
 
-        not in_quotes and Enum.slice(chars, i, length(closer_chars)) == closer_chars ->
+        not in_quotes and
+            slice_join(chars, i, length(closer_chars)) == IO.iodata_to_binary(closer_chars) ->
           {text, i, in_quotes}
 
         true ->
@@ -851,8 +887,8 @@ defmodule GrokMermaid.Parse do
   defp is_link_char(c), do: c in ["-", ".", "=", "<", ">"]
 
   defp scan_link_chars(chars, from) do
-    Enum.reduce_while(from..(length(chars) - 1)//1, from, fn _, acc ->
-      c = Enum.at(chars, acc)
+    Enum.reduce_while(from..(tuple_size(chars) - 1)//1, from, fn _, acc ->
+      c = at(chars, acc)
       if c != nil and is_link_char(c), do: {:cont, acc + 1}, else: {:halt, acc}
     end)
   end
@@ -863,8 +899,8 @@ defmodule GrokMermaid.Parse do
     i = skip_spaces(chars, start)
 
     {left, i} =
-      if Enum.at(chars, i) in ["o", "x"] and Enum.at(chars, i + 1) in ["-", ".", "="] do
-        {if(Enum.at(chars, i) == "o", do: :circle, else: :cross), i + 1}
+      if at(chars, i) in ["o", "x"] and at(chars, i + 1) in ["-", ".", "="] do
+        {if(at(chars, i) == "o", do: :circle, else: :cross), i + 1}
       else
         {:none, i}
       end
@@ -876,20 +912,20 @@ defmodule GrokMermaid.Parse do
     if i == op_start do
       nil
     else
-      op1 = Enum.slice(chars, op_start, i - op_start) |> Enum.join()
+      op1 = slice_join(chars, op_start, i - op_start)
       left = if left == :none and String.starts_with?(op1, "<"), do: :arrow, else: left
       line = line_kind(op1)
       {right, i} = right_head(chars, op1, i)
 
       case pipe_label(chars, i) do
         {label, next} when is_binary(label) ->
-          %{left: left, right: right, line: line, label: non_empty(label), next: next}
+          %Link{left: left, right: right, line: line, label: non_empty(label), next: next}
 
         _ ->
           if right == :none do
             inline_label_link(chars, i, left, line)
           else
-            %{left: left, right: right, line: line, label: nil, next: i}
+            %Link{left: left, right: right, line: line, label: nil, next: i}
           end
       end
     end
@@ -897,16 +933,16 @@ defmodule GrokMermaid.Parse do
 
   # `-->|text|` label
   defp pipe_label(chars, i) do
-    if Enum.at(chars, i) == "|" do
+    if at(chars, i) == "|" do
       l_start = i + 1
 
       l_end =
-        Enum.reduce_while((i + 1)..(length(chars) - 1)//1, l_start, fn _, acc ->
-          if Enum.at(chars, acc) == "|", do: {:halt, acc}, else: {:cont, acc + 1}
+        Enum.reduce_while((i + 1)..(tuple_size(chars) - 1)//1, l_start, fn _, acc ->
+          if at(chars, acc) == "|", do: {:halt, acc}, else: {:cont, acc + 1}
         end)
 
-      label = Enum.slice(chars, l_start, l_end - l_start) |> Enum.join() |> Labels.clean_label()
-      next = if Enum.at(chars, l_end) == "|", do: l_end + 1, else: l_end
+      label = slice_join(chars, l_start, l_end - l_start) |> Labels.clean_label()
+      next = if at(chars, l_end) == "|", do: l_end + 1, else: l_end
       {label, next}
     else
       :none
@@ -918,24 +954,30 @@ defmodule GrokMermaid.Parse do
     text_start = skip_spaces(chars, i)
 
     j =
-      Enum.reduce_while(text_start..(length(chars) - 1)//1, text_start, fn _, acc ->
-        c = Enum.at(chars, acc)
+      Enum.reduce_while(text_start..(tuple_size(chars) - 1)//1, text_start, fn _, acc ->
+        c = at(chars, acc)
         if c != nil and not is_link_char(c), do: {:cont, acc + 1}, else: {:halt, acc}
       end)
 
-    if j < length(chars) and j > text_start and Enum.at(chars, j) != "<" do
-      text = Enum.slice(chars, text_start, j - text_start) |> Enum.join()
+    if j < tuple_size(chars) and j > text_start and at(chars, j) != "<" do
+      text = slice_join(chars, text_start, j - text_start)
       op2_start = j
 
       j = scan_link_chars(chars, j)
 
-      op2 = Enum.slice(chars, op2_start, j - op2_start) |> Enum.join()
+      op2 = slice_join(chars, op2_start, j - op2_start)
       {right, j} = right_head(chars, op2, j)
       line = if line == :solid, do: line_kind(op2), else: line
 
-      %{left: left, right: right, line: line, label: non_empty(Labels.clean_label(text)), next: j}
+      %Link{
+        left: left,
+        right: right,
+        line: line,
+        label: non_empty(Labels.clean_label(text)),
+        next: j
+      }
     else
-      %{left: left, right: :none, line: line, label: nil, next: i}
+      %Link{left: left, right: :none, line: line, label: nil, next: i}
     end
   end
 
@@ -963,7 +1005,7 @@ defmodule GrokMermaid.Parse do
   # A trailing `o`/`x` head, only when followed by a statement boundary.
   defp trailing_head(chars, i) do
     head =
-      case Enum.at(chars, i) do
+      case at(chars, i) do
         "o" -> :circle
         "x" -> :cross
         _ -> nil
@@ -972,7 +1014,7 @@ defmodule GrokMermaid.Parse do
     if head == nil do
       nil
     else
-      next_char = Enum.at(chars, i + 1)
+      next_char = at(chars, i + 1)
 
       if next_char in [nil, " ", "\t", "|", "&", ";"] do
         {head, i + 1}
@@ -998,7 +1040,7 @@ defmodule GrokMermaid.Parse do
       {graph, _in_note, assigns} =
         parse_state_statements(Enum.drop(statements, 1), graph, false, [], [])
 
-      graph = Graph.apply_classes(graph, assigns)
+      graph = Graph.apply_classes(graph, Enum.reverse(assigns))
       if graph.over_cap or graph.nodes == [], do: nil, else: graph
     end
   end
@@ -1015,7 +1057,13 @@ defmodule GrokMermaid.Parse do
 
       cond do
         first == "direction" ->
-          graph = %{graph | dir: Graph.parse_dir(st |> words() |> Enum.at(1) || "")}
+          dir_token =
+            case words(st) do
+              [_h, d | _] -> d
+              _ -> ""
+            end
+
+          graph = %{graph | dir: Graph.parse_dir(dir_token)}
           parse_state_statements(rest, graph, false, assigns, stack)
 
         first == "note" ->
@@ -1057,7 +1105,7 @@ defmodule GrokMermaid.Parse do
         first == "class" ->
           case parse_class_assign(st) do
             nil -> parse_state_statements(rest, graph, false, assigns, stack)
-            assign -> parse_state_statements(rest, graph, false, assigns ++ [assign], stack)
+            assign -> parse_state_statements(rest, graph, false, [assign | assigns], stack)
           end
 
         first in ["hide", "scale"] ->
@@ -1141,7 +1189,9 @@ defmodule GrokMermaid.Parse do
           nil
       end
     else
-      {id, _classes} = body |> String.split("<<") |> hd() |> String.trim() |> take_tags()
+      {id, _classes} =
+        body |> String.split("<<", parts: 2) |> hd() |> String.trim() |> take_tags()
+
       if id == "" or String.match?(id, ~r/\s/), do: nil, else: {id, id}
     end
   end
@@ -1319,7 +1369,7 @@ defmodule GrokMermaid.Parse do
                 graph = Enum.reduce(to_classes, graph, &Graph.add_class(&2, to, &1))
 
                 {graph, _} =
-                  Graph.push_edge(graph, %{
+                  Graph.push_edge(graph, %Graph.Edge{
                     from: from,
                     to: to,
                     label: label,
@@ -1414,7 +1464,9 @@ defmodule GrokMermaid.Parse do
           nil
 
         {graph, infos, _, assigns, hrefs} ->
-          graph = Graph.apply_hrefs(graph, hrefs) |> Graph.apply_classes(assigns)
+          graph =
+            Graph.apply_hrefs(graph, Enum.reverse(hrefs))
+            |> Graph.apply_classes(Enum.reverse(assigns))
 
           if graph.over_cap or graph.nodes == [] do
             nil
@@ -1426,12 +1478,12 @@ defmodule GrokMermaid.Parse do
   end
 
   defp sync_infos(graph, infos) do
-    if length(infos) >= length(graph.nodes) do
+    extra = length(graph.nodes) - length(infos)
+
+    if extra <= 0 do
       infos
     else
-      Enum.reduce(length(infos)..(length(graph.nodes) - 1), infos, fn _, acc ->
-        acc ++ [Graph.empty_class_info()]
-      end)
+      infos ++ List.duplicate(Graph.empty_class_info(), extra)
     end
   end
 
@@ -1464,7 +1516,13 @@ defmodule GrokMermaid.Parse do
 
       cond do
         first == "direction" ->
-          graph = %{graph | dir: Graph.parse_dir(st |> words() |> Enum.at(1) || "")}
+          dir_token =
+            case words(st) do
+              [_h, d | _] -> d
+              _ -> ""
+            end
+
+          graph = %{graph | dir: Graph.parse_dir(dir_token)}
           parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
 
         first == "classdef" ->
@@ -1473,7 +1531,7 @@ defmodule GrokMermaid.Parse do
         first in ["link", "click"] ->
           case parse_href(st) do
             nil -> parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
-            href -> parse_class_statements(rest, graph, infos, nil, assigns, hrefs ++ [href])
+            href -> parse_class_statements(rest, graph, infos, nil, assigns, [href | hrefs])
           end
 
         first == "cssclass" ->
@@ -1485,7 +1543,7 @@ defmodule GrokMermaid.Parse do
 
           case parse_class_assign("class " <> rest_str) do
             nil -> parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
-            assign -> parse_class_statements(rest, graph, infos, nil, assigns ++ [assign], hrefs)
+            assign -> parse_class_statements(rest, graph, infos, nil, [assign | assigns], hrefs)
           end
 
         first == "class" ->
@@ -1502,7 +1560,7 @@ defmodule GrokMermaid.Parse do
                   parse_class_statements(rest, graph, infos, nil, assigns, hrefs)
 
                 assign ->
-                  parse_class_statements(rest, graph, infos, nil, assigns ++ [assign], hrefs)
+                  parse_class_statements(rest, graph, infos, nil, [assign | assigns], hrefs)
               end
 
             name == "" or String.match?(name, ~r/\s/) ->
@@ -1590,7 +1648,7 @@ defmodule GrokMermaid.Parse do
                   | edges:
                       graph.edges ++
                         [
-                          %{
+                          %Graph.Edge{
                             from: f,
                             to: t,
                             label: rel.label,
@@ -1643,15 +1701,15 @@ defmodule GrokMermaid.Parse do
   end
 
   defp parse_class_relation(st) do
-    chars = String.graphemes(st)
+    chars = st |> String.graphemes() |> List.to_tuple()
     found = find_class_op(chars)
 
     if found == nil do
       nil
     else
       {pos, op, head_from, head_to, line} = found
-      lhs_raw = chars |> Enum.take(pos) |> Enum.join() |> String.trim()
-      rhs_raw = chars |> Enum.drop(pos + String.length(op)) |> Enum.join() |> String.trim()
+      lhs_raw = slice_join(chars, 0, pos) |> String.trim()
+      rhs_raw = slice_tail_join(chars, pos + String.length(op)) |> String.trim()
       {lhs, card_from} = strip_cardinality_suffix(lhs_raw)
       {rhs, card_to} = strip_cardinality_prefix(rhs_raw)
 
@@ -1676,16 +1734,16 @@ defmodule GrokMermaid.Parse do
   end
 
   defp find_class_op(chars) do
-    Enum.reduce_while(0..(length(chars) - 1), nil, fn pos, _acc ->
-      tail = Enum.slice(chars, pos, min(4, length(chars) - pos)) |> Enum.join()
+    Enum.reduce_while(0..(tuple_size(chars) - 1), nil, fn pos, _acc ->
+      tail = slice_join(chars, pos, min(4, tuple_size(chars) - pos))
 
       case Enum.find(@class_ops, fn {op, _, _, _} -> String.starts_with?(tail, op) end) do
         nil ->
           {:cont, nil}
 
         {op, head_from, head_to, line} ->
-          prev = if pos > 0, do: Enum.at(chars, pos - 1), else: nil
-          after_c = Enum.at(chars, pos + String.length(op))
+          prev = if pos > 0, do: at(chars, pos - 1), else: nil
+          after_c = at(chars, pos + String.length(op))
 
           glued_lhs = String.starts_with?(op, "o") and prev != nil and Labels.is_id_char(prev)
           glued_rhs = String.ends_with?(op, "o") and after_c != nil and Labels.is_id_char(after_c)
@@ -1782,48 +1840,45 @@ defmodule GrokMermaid.Parse do
           end
 
         {rel, label} ->
-          tokens = words(rel)
-
-          if not match?([_, _, _], tokens) do
-            nil
-          else
-            case parse_er_op(Enum.at(tokens, 1)) do
-              nil ->
-                nil
-
-              op ->
-                {graph, infos, f} = er_entity(graph, infos, Enum.at(tokens, 0))
-                {graph, infos, t} = er_entity(graph, infos, Enum.at(tokens, 2))
-
-                if f == nil or t == nil or length(graph.edges) >= Graph.max_edges() do
+          case words(rel) do
+            [f_id, op_str, t_id] ->
+              case parse_er_op(op_str) do
+                nil ->
                   nil
-                else
-                  rel_label = if label == nil, do: "", else: Labels.clean_label(label)
 
-                  edge_label =
-                    [op.card_l, rel_label, op.card_r]
-                    |> Enum.reject(&(&1 == ""))
-                    |> Enum.join(" ")
+                op ->
+                  {graph, infos, f} = er_entity(graph, infos, f_id)
+                  {graph, infos, t} = er_entity(graph, infos, t_id)
 
-                  graph = %{
-                    graph
-                    | edges:
-                        graph.edges ++
-                          [
-                            %{
-                              from: f,
-                              to: t,
-                              label: if(edge_label == "", do: nil, else: edge_label),
-                              head_to: :none,
-                              head_from: :none,
-                              line: op.line
-                            }
-                          ]
-                  }
+                  if f == nil or t == nil or length(graph.edges) >= Graph.max_edges() do
+                    nil
+                  else
+                    rel_label = if label == nil, do: "", else: Labels.clean_label(label)
 
-                  parse_er_statements(rest, graph, infos, nil)
-                end
-            end
+                    edge_label =
+                      [op.card_l, rel_label, op.card_r]
+                      |> Enum.reject(&(&1 == ""))
+                      |> Enum.join(" ")
+
+                    graph = %{
+                      graph
+                      | edges:
+                          graph.edges ++
+                            [
+                              %Graph.Edge{
+                                from: f,
+                                to: t,
+                                label: if(edge_label == "", do: nil, else: edge_label),
+                                head_to: :none,
+                                head_from: :none,
+                                line: op.line
+                              }
+                            ]
+                    }
+
+                    parse_er_statements(rest, graph, infos, nil)
+                  end
+              end
           end
       end
     end
@@ -1907,13 +1962,15 @@ defmodule GrokMermaid.Parse do
   @doc "ER attributes are `type name`; a trailing quoted comment is dropped."
   def push_er_attribute(info, raw) do
     parts =
-      Enum.reduce_while(words(raw), [], fn tok, acc ->
+      words(raw)
+      |> Enum.reduce_while([], fn tok, acc ->
         if String.starts_with?(tok, "\"") do
           {:halt, acc}
         else
-          {:cont, acc ++ [tok]}
+          {:cont, [tok | acc]}
         end
       end)
+      |> Enum.reverse()
 
     if parts == [] do
       info
@@ -2064,7 +2121,7 @@ defmodule GrokMermaid.Parse do
         seq =
           if lower in ["else", "and", "option"] do
             # A continuation only divides a block that opened one.
-            if List.last(blocks) == :open do
+            if match?([:open | _], blocks) do
               %{seq | items: seq.items ++ [{:divider, Labels.decode_html_entities(st)}]}
             else
               seq
@@ -2076,12 +2133,12 @@ defmodule GrokMermaid.Parse do
         if length(seq.items) >= GrokMermaid.Graph.max_edges() do
           nil
         else
-          blocks = if lower in ["else", "and", "option"], do: blocks, else: blocks ++ [:open]
+          blocks = if lower in ["else", "and", "option"], do: blocks, else: [:open | blocks]
           parse_sequence_statements(rest, seq, autonumber, msg_count, blocks)
         end
 
       lower in ["rect", "box"] ->
-        parse_sequence_statements(rest, seq, autonumber, msg_count, blocks ++ [:box])
+        parse_sequence_statements(rest, seq, autonumber, msg_count, [:box | blocks])
 
       lower == "end" ->
         {blocks, seq} =
@@ -2090,11 +2147,11 @@ defmodule GrokMermaid.Parse do
               if length(seq.items) >= GrokMermaid.Graph.max_edges() do
                 {blocks, seq}
               else
-                {Enum.drop(blocks, -1), %{seq | items: seq.items ++ [{:divider, "end"}]}}
+                {tl(blocks), %{seq | items: seq.items ++ [{:divider, "end"}]}}
               end
 
             _ ->
-              {Enum.drop(blocks, -1), seq}
+              {tl(blocks), seq}
           end
 
         if length(seq.items) >= GrokMermaid.Graph.max_edges() do
@@ -2202,22 +2259,20 @@ defmodule GrokMermaid.Parse do
   end
 
   defp parse_seq_message(st, seq) do
-    chars = String.graphemes(st)
+    chars = st |> String.graphemes() |> List.to_tuple()
     found = find_seq_op(chars)
 
     if found == nil do
       nil
     else
       {pos, op, dashed, head} = found
-      from_id = chars |> Enum.take(pos) |> Enum.join() |> String.trim()
+      from_id = slice_join(chars, 0, pos) |> String.trim()
 
       if from_id == "" do
         nil
       else
         rest_str =
-          chars
-          |> Enum.drop(pos + String.length(op))
-          |> Enum.join()
+          slice_tail_join(chars, pos + String.length(op))
           |> String.trim_leading()
           |> String.replace(~r/^[+-]+/, "")
 
@@ -2242,8 +2297,8 @@ defmodule GrokMermaid.Parse do
   end
 
   defp find_seq_op(chars) do
-    Enum.reduce_while(0..(length(chars) - 1), nil, fn pos, _acc ->
-      tail = Enum.slice(chars, pos, min(4, length(chars) - pos)) |> Enum.join()
+    Enum.reduce_while(0..(tuple_size(chars) - 1), nil, fn pos, _acc ->
+      tail = slice_join(chars, pos, min(4, tuple_size(chars) - pos))
 
       case Enum.find(@seq_ops, fn {op, _, _} -> String.starts_with?(tail, op) end) do
         nil -> {:cont, nil}

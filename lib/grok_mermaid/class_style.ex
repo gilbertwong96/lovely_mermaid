@@ -209,8 +209,15 @@ defmodule GrokMermaid.ClassStyle do
               cond do
                 k in ["fill", "stroke", "color"] ->
                   case normalize_color(v) do
-                    nil -> out
-                    c -> Map.put(out, String.to_atom(k), c)
+                    nil ->
+                      out
+
+                    c ->
+                      Map.put(
+                        out,
+                        %{"fill" => :fill, "stroke" => :stroke, "color" => :color}[k],
+                        c
+                      )
                   end
 
                 k == "font-weight" ->

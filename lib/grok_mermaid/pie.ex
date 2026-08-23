@@ -10,7 +10,7 @@ defmodule GrokMermaid.Pie do
 
   # Columns of the full-scale bar; eighth blocks refine below one cell.
   @bar_w 20
-  @eighths ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+  @eighths {"", "▏", "▎", "▍", "▌", "▋", "▊", "▉"}
 
   @doc "Render a `pie` source to a canvas, or `nil` when nothing parses."
   @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
@@ -53,12 +53,18 @@ defmodule GrokMermaid.Pie do
           end
 
         canvas =
-          Enum.reduce(Enum.with_index(rows), canvas, fn {{label, share, suffix, value}, i},
-                                                        canvas ->
+          Enum.reduce(Stream.with_index(rows), canvas, fn {{label, share, suffix, value}, i},
+                                                          canvas ->
             y = top + i
             canvas = Canvas.draw_text(canvas, label, 0, y, :text)
             eighths = round(share * @bar_w * 8)
-            bar = String.duplicate("█", div(eighths, 8)) <> Enum.at(@eighths, rem(eighths, 8))
+
+            bar =
+              IO.iodata_to_binary([
+                String.duplicate("█", div(eighths, 8)),
+                elem(@eighths, rem(eighths, 8))
+              ])
+
             # A nonzero slice always shows at least a sliver.
             bar = if bar == "" and value > 0, do: "▏", else: bar
             canvas = Canvas.draw_text(canvas, bar, bar_x, y, :edge)
@@ -132,11 +138,11 @@ defmodule GrokMermaid.Pie do
               else
                 case parse_slice(st) do
                   nil ->
-                    {slices, warnings ++ ["dropped, unreadable statement: \"#{st}\""], false,
+                    {slices, ["dropped, unreadable statement: \"#{st}\"" | warnings], false,
                      title}
 
                   slice ->
-                    {slices ++ [slice], warnings, false, title}
+                    {[slice | slices], warnings, false, title}
                 end
               end
           end
@@ -144,13 +150,16 @@ defmodule GrokMermaid.Pie do
 
       warnings =
         if truncated,
-          do: warnings ++ ["diagram truncated: slice cap (#{Graph.max_nodes()}) reached"],
-          else: warnings
+          do:
+            Enum.reverse([
+              "diagram truncated: slice cap (#{Graph.max_nodes()}) reached" | warnings
+            ]),
+          else: Enum.reverse(warnings)
 
       if slices == [] do
         :error
       else
-        {:ok, title, slices, show_data, warnings}
+        {:ok, title, Enum.reverse(slices), show_data, warnings}
       end
     end
   end
@@ -159,12 +168,12 @@ defmodule GrokMermaid.Pie do
   @spec parse_slice(String.t()) :: %{label: String.t(), value: number()} | nil
   def parse_slice(st) do
     chars = String.graphemes(st)
-    mask = Parse.quote_mask(chars)
+    mask = chars |> Parse.quote_mask() |> List.to_tuple()
 
     colon =
       chars
       |> Enum.with_index()
-      |> Enum.find_value(fn {c, i} -> if c == ":" and not Enum.at(mask, i), do: i end)
+      |> Enum.find_value(fn {c, i} -> if c == ":" and not elem(mask, i), do: i end)
 
     if colon == nil do
       nil

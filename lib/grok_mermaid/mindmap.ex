@@ -24,7 +24,7 @@ defmodule GrokMermaid.Mindmap do
         canvas = Canvas.new(width, length(rows))
 
         canvas =
-          Enum.reduce(Enum.with_index(rows), canvas, fn {{prefix, text}, y}, canvas ->
+          Enum.reduce(Stream.with_index(rows), canvas, fn {{prefix, text}, y}, canvas ->
             canvas = Canvas.draw_text(canvas, prefix, 0, y, :edge)
             Canvas.draw_text(canvas, text, Width.string_width(prefix), y, :text)
           end)
@@ -77,9 +77,9 @@ defmodule GrokMermaid.Mindmap do
                   text = node_text(body)
 
                   if text == "" do
-                    {entries, warnings ++ ["dropped, unreadable statement: \"#{body}\""], false}
+                    {entries, ["dropped, unreadable statement: \"#{body}\"" | warnings], false}
                   else
-                    {entries ++ [{indent, Labels.fit_label(text, Labels.wrap_width())}], warnings,
+                    {[{indent, Labels.fit_label(text, Labels.wrap_width())} | entries], warnings,
                      false}
                   end
                 end
@@ -89,10 +89,13 @@ defmodule GrokMermaid.Mindmap do
 
       warnings =
         if truncated,
-          do: warnings ++ ["diagram truncated: node cap (#{Graph.max_nodes()}) reached"],
-          else: warnings
+          do:
+            Enum.reverse([
+              "diagram truncated: node cap (#{Graph.max_nodes()}) reached" | warnings
+            ]),
+          else: Enum.reverse(warnings)
 
-      roots = build_tree(entries)
+      roots = build_tree(Enum.reverse(entries))
 
       if roots == [] do
         :error
@@ -158,15 +161,15 @@ defmodule GrokMermaid.Mindmap do
   end
 
   defp walk(node, prefix, child_prefix, rows) do
-    rows = rows ++ [{prefix, node.text}]
+    rows = rows ++ [{IO.iodata_to_binary(prefix), node.text}]
 
-    Enum.reduce(Enum.with_index(node.children), rows, fn {child, i}, rows ->
+    Enum.reduce(Stream.with_index(node.children), rows, fn {child, i}, rows ->
       last = i == length(node.children) - 1
 
       walk(
         child,
-        child_prefix <> if(last, do: "└── ", else: "├── "),
-        child_prefix <> if(last, do: "    ", else: "│   "),
+        [child_prefix, if(last, do: "└── ", else: "├── ")],
+        [child_prefix, if(last, do: "    ", else: "│   ")],
         rows
       )
     end)

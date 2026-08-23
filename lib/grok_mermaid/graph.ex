@@ -14,6 +14,16 @@ defmodule GrokMermaid.Graph do
   # Class members / ER attributes listed per box before eliding with `…`.
   @max_members 8
 
+  defmodule Node do
+    @moduledoc false
+    defstruct [:label, :shape, :classes, :href]
+  end
+
+  defmodule Edge do
+    @moduledoc false
+    defstruct [:from, :to, :label, :head_to, :head_from, :line]
+  end
+
   defstruct nodes: [],
             edges: [],
             index: %{},
@@ -36,7 +46,7 @@ defmodule GrokMermaid.Graph do
   @type line_kind :: :solid | :dotted | :thick
   @type dir :: :down | :up | :right | :left
 
-  @type node_t :: %{
+  @type node_t :: %Node{
           label: String.t(),
           shape: shape(),
           # Author classes, from `:::name` or `class A,B name`; carried out
@@ -47,7 +57,7 @@ defmodule GrokMermaid.Graph do
           href: String.t() | nil
         }
 
-  @type edge :: %{
+  @type edge :: %Edge{
           from: non_neg_integer(),
           to: non_neg_integer(),
           label: String.t() | nil,
@@ -114,7 +124,7 @@ defmodule GrokMermaid.Graph do
           {%{graph | over_cap: true}, nil}
         else
           index = Map.put(graph.index, id, length(graph.nodes))
-          nodes = graph.nodes ++ [%{label: label || id, shape: shape, classes: [], href: nil}]
+          nodes = graph.nodes ++ [%Node{label: label || id, shape: shape, classes: [], href: nil}]
           node_group = graph.node_group ++ [graph.cur_group]
           {%{graph | index: index, nodes: nodes, node_group: node_group}, length(nodes) - 1}
         end

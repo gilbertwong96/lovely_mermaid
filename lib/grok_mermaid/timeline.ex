@@ -8,6 +8,14 @@ defmodule GrokMermaid.Timeline do
 
   alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
 
+  defmodule Row do
+    @moduledoc false
+    defstruct [:period, :event, :section]
+
+    def new(period, event, section),
+      do: %__MODULE__{period: period, event: event, section: section}
+  end
+
   @doc "Render a `timeline` source to a canvas, or `nil` when nothing parses."
   @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil
   def render(src) do
@@ -43,7 +51,7 @@ defmodule GrokMermaid.Timeline do
           end
 
         canvas =
-          Enum.reduce(Enum.with_index(rows), canvas, fn {row, i}, canvas ->
+          Enum.reduce(Stream.with_index(rows), canvas, fn {row, i}, canvas ->
             y = top + i
 
             if row.section do
@@ -109,8 +117,7 @@ defmodule GrokMermaid.Timeline do
                   idx = find_needle(String.downcase(st), "section")
                   name = String.trim(String.slice(st, (idx + 7)..-1//1))
 
-                  {title, rows ++ [%{period: "", event: clean(name), section: true}], warnings,
-                   false, false}
+                  {title, [Row.new("", clean(name), true) | rows], warnings, false, false}
 
                 true ->
                   parts = String.split(st, ":") |> Enum.map(&clean/1)
@@ -121,17 +128,16 @@ defmodule GrokMermaid.Timeline do
                     period == "" and events != [] and last_period ->
                       new_rows =
                         Enum.map(events, fn event ->
-                          %{period: "", event: event, section: false}
+                          Row.new("", event, false)
                         end)
 
-                      {title, rows ++ new_rows, warnings, false, true}
+                      {title, Enum.reverse(new_rows, rows), warnings, false, true}
 
                     period != "" and events == [] ->
-                      {title, rows ++ [%{period: period, event: "", section: false}], warnings,
-                       false, true}
+                      {title, [Row.new(period, "", false) | rows], warnings, false, true}
 
                     period == "" or Enum.any?(events, &(&1 == "")) ->
-                      {title, rows, warnings ++ ["dropped, unreadable statement: \"#{st}\""],
+                      {title, rows, ["dropped, unreadable statement: \"#{st}\"" | warnings],
                        false, last_period}
 
                     true ->
@@ -139,14 +145,10 @@ defmodule GrokMermaid.Timeline do
                         events
                         |> Enum.with_index()
                         |> Enum.map(fn {event, i} ->
-                          %{
-                            period: if(i == 0, do: period, else: ""),
-                            event: event,
-                            section: false
-                          }
+                          Row.new(if(i == 0, do: period, else: ""), event, false)
                         end)
 
-                      {title, rows ++ new_rows, warnings, false, true}
+                      {title, Enum.reverse(new_rows, rows), warnings, false, true}
                   end
               end
           end
@@ -154,13 +156,16 @@ defmodule GrokMermaid.Timeline do
 
       warnings =
         if truncated,
-          do: warnings ++ ["diagram truncated: event cap (#{Graph.max_edges()}) reached"],
-          else: warnings
+          do:
+            Enum.reverse([
+              "diagram truncated: event cap (#{Graph.max_edges()}) reached" | warnings
+            ]),
+          else: Enum.reverse(warnings)
 
       if rows == [] do
         :error
       else
-        {:ok, title, rows, warnings}
+        {:ok, title, Enum.reverse(rows), warnings}
       end
     end
   end

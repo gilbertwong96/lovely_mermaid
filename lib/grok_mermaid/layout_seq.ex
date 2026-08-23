@@ -24,16 +24,18 @@ defmodule GrokMermaid.LayoutSeq do
   defp note_geometry(xs, anchor, text_w) do
     case anchor do
       {:over, from, to} ->
-        center = half(Enum.at(xs, from) + Enum.at(xs, to))
-        w = max(Enum.at(xs, to) - Enum.at(xs, from) + 5, text_w + 2 * @pad + 2)
+        xf = elem(xs, from)
+        xt = elem(xs, to)
+        center = half(xf + xt)
+        w = max(xt - xf + 5, text_w + 2 * @pad + 2)
         %{x: sat(center, half(w)), w: w}
 
       {:left, at} ->
         w = text_w + 2 * @pad + 2
-        %{x: sat(Enum.at(xs, at), 2 + w - 1), w: w}
+        %{x: sat(elem(xs, at), 2 + w - 1), w: w}
 
       {:right, at} ->
-        %{x: Enum.at(xs, at) + 2, w: text_w + 2 * @pad + 2}
+        %{x: elem(xs, at) + 2, w: text_w + 2 * @pad + 2}
     end
   end
 
@@ -44,14 +46,22 @@ defmodule GrokMermaid.LayoutSeq do
   @spec layout_sequence(Sequence.t()) :: Canvas.t() | nil
   def layout_sequence(seq) do
     n = length(seq.labels)
-    labels = Enum.map(seq.labels, &Labels.fit_label(&1, Labels.wrap_width()))
-    box_w = Enum.map(labels, fn l -> max(1, Width.string_width(l)) + 2 * @pad + 2 end)
+    labels = seq.labels |> Enum.map(&Labels.fit_label(&1, Labels.wrap_width())) |> List.to_tuple()
+
+    box_w =
+      labels
+      |> Tuple.to_list()
+      |> Enum.map(fn l -> max(1, Width.string_width(l)) + 2 * @pad + 2 end)
+      |> List.to_tuple()
+
     box_h = 3
 
     gaps =
-      Enum.map(0..(max(sat(n, 1), 0) - 1)//1, fn i ->
-        max(@seq_gap, ceil(Enum.at(box_w, i) / 2) + ceil(Enum.at(box_w, i + 1) / 2) + 1)
+      0..(max(sat(n, 1), 0) - 1)//1
+      |> Enum.map(fn i ->
+        max(@seq_gap, ceil(elem(box_w, i) / 2) + ceil(elem(box_w, i + 1) / 2) + 1)
       end)
+      |> List.to_tuple()
 
     reqs =
       Enum.reduce(seq.items, [], fn item, reqs ->
@@ -60,8 +70,8 @@ defmodule GrokMermaid.LayoutSeq do
             tw = item_text_w(text)
 
             cond do
-              from != to -> reqs ++ [{min(from, to), max(from, to), max(tw + 2, 4)}]
-              from + 1 < n -> reqs ++ [{from, from + 1, 5 + tw + 2}]
+              from != to -> [{min(from, to), max(from, to), max(tw + 2, 4)} | reqs]
+              from + 1 < n -> [{from, from + 1, 5 + tw + 2} | reqs]
               true -> reqs
             end
 
@@ -70,7 +80,7 @@ defmodule GrokMermaid.LayoutSeq do
 
             case anchor do
               {:over, from, to} when from < to ->
-                reqs ++ [{from, to, sat(tw, 1)}]
+                [{from, to, sat(tw, 1)} | reqs]
 
               {:over, from, _} ->
                 need = ceil((tw + 4) / 2) + 2
@@ -79,13 +89,13 @@ defmodule GrokMermaid.LayoutSeq do
                   if(from > 0, do: [{from - 1, from, need}], else: []) ++
                     if(from + 1 < n, do: [{from, from + 1, need}], else: [])
 
-                reqs ++ extra
+                Enum.reverse(extra, reqs)
 
               {:left, at} ->
-                if at > 0, do: reqs ++ [{at - 1, at, tw + 7}], else: reqs
+                if at > 0, do: [{at - 1, at, tw + 7} | reqs], else: reqs
 
               {:right, at} ->
-                if at + 1 < n, do: reqs ++ [{at, at + 1, tw + 7}], else: reqs
+                if at + 1 < n, do: [{at, at + 1, tw + 7} | reqs], else: reqs
             end
 
           _ ->
@@ -94,24 +104,24 @@ defmodule GrokMermaid.LayoutSeq do
       end)
 
     # Narrowest spans first, so a wide requirement absorbs what they gave.
-    reqs = Enum.sort_by(reqs, fn {l, r, _} -> r - l end)
+    reqs = reqs |> Enum.reverse() |> Enum.sort_by(fn {l, r, _} -> r - l end)
 
     gaps =
       Enum.reduce(reqs, gaps, fn {l, r, need}, gaps ->
-        cur = Enum.reduce(l..(r - 1)//1, 0, fn i, acc -> acc + Enum.at(gaps, i) end)
-        if cur < need, do: List.update_at(gaps, r - 1, &(&1 + need - cur)), else: gaps
+        cur = Enum.reduce(l..(r - 1)//1, 0, fn i, acc -> acc + elem(gaps, i) end)
+        if cur < need, do: put_elem(gaps, r - 1, elem(gaps, r - 1) + need - cur), else: gaps
       end)
 
     xs = build_xs(n, gaps, box_w)
 
     canvas_w =
-      xs |> List.last() |> then(fn last -> last + ceil(Enum.at(box_w, n - 1) / 2) + 1 end)
+      elem(xs, n - 1) + ceil(elem(box_w, n - 1) / 2) + 1
 
     canvas_w =
       Enum.reduce(seq.items, canvas_w, fn item, w ->
         case item do
           {:message, from, from2, text, _, _} when from == from2 ->
-            max(w, Enum.at(xs, from) + 5 + item_text_w(text) + 1)
+            max(w, elem(xs, from) + 5 + item_text_w(text) + 1)
 
           {:note, anchor, text} ->
             g = note_geometry(xs, anchor, Width.string_width(text))
@@ -126,6 +136,7 @@ defmodule GrokMermaid.LayoutSeq do
       end)
 
     {rows, y} = stack_rows(seq.items, box_h + 1, [])
+    rows = List.to_tuple(rows)
     bottom_top = y
     canvas_h = bottom_top + box_h
 
@@ -138,24 +149,24 @@ defmodule GrokMermaid.LayoutSeq do
       canvas =
         Enum.reduce(0..(n - 1), canvas, fn i, canvas ->
           box = %{
-            x: sat(Enum.at(xs, i), half(Enum.at(box_w, i))),
+            x: sat(elem(xs, i), half(elem(box_w, i))),
             y: 0,
-            w: Enum.at(box_w, i),
+            w: elem(box_w, i),
             h: box_h,
-            cx: Enum.at(xs, i),
+            cx: elem(xs, i),
             cy: 1,
             rank: 0
           }
 
-          canvas = Layout.draw_box(canvas, box, [Enum.at(labels, i)], :rect)
+          canvas = Layout.draw_box(canvas, box, [elem(labels, i)], :rect)
           box2 = %{box | y: bottom_top, cy: bottom_top + 1}
-          Layout.draw_box(canvas, box2, [Enum.at(labels, i)], :rect)
+          Layout.draw_box(canvas, box2, [elem(labels, i)], :rect)
         end)
 
       # note boxes
       canvas =
         seq.items
-        |> Enum.with_index()
+        |> Stream.with_index()
         |> Enum.reduce(canvas, fn {item, k}, canvas ->
           case item do
             {:note, anchor, text} ->
@@ -163,11 +174,11 @@ defmodule GrokMermaid.LayoutSeq do
 
               box = %{
                 x: g.x,
-                y: Enum.at(rows, k),
+                y: elem(rows, k),
                 w: g.w,
                 h: 3,
                 cx: g.x + half(g.w),
-                cy: Enum.at(rows, k) + 1,
+                cy: elem(rows, k) + 1,
                 rank: 0
               }
 
@@ -180,7 +191,7 @@ defmodule GrokMermaid.LayoutSeq do
 
       # lifelines
       canvas =
-        Enum.reduce(xs, canvas, fn x, canvas ->
+        Enum.reduce(Tuple.to_list(xs), canvas, fn x, canvas ->
           canvas
           |> Canvas.junction(x, box_h - 1, 2)
           |> Canvas.seg_v(x, box_h, bottom_top - 1)
@@ -189,9 +200,9 @@ defmodule GrokMermaid.LayoutSeq do
 
       canvas =
         seq.items
-        |> Enum.with_index()
+        |> Stream.with_index()
         |> Enum.reduce(canvas, fn {item, k}, canvas ->
-          r = Enum.at(rows, k)
+          r = elem(rows, k)
 
           case item do
             {:message, from, to, text, dashed, head} ->
@@ -210,13 +221,13 @@ defmodule GrokMermaid.LayoutSeq do
   end
 
   defp build_xs(n, gaps, box_w) do
-    Enum.reduce(0..(n - 1), [], fn i, acc ->
-      if i == 0 do
-        [half(Enum.at(box_w, 0))]
-      else
-        acc ++ [List.last(acc) + Enum.at(gaps, i - 1)]
-      end
-    end)
+    {xs, _} =
+      Enum.reduce(0..(n - 1)//1, {[], 0}, fn i, {xs, prev} ->
+        x = if i == 0, do: half(elem(box_w, 0)), else: prev + elem(gaps, i - 1)
+        {[x | xs], x}
+      end)
+
+    xs |> Enum.reverse() |> List.to_tuple()
   end
 
   defp stack_rows([], y, rows), do: {Enum.reverse(rows), y}
@@ -240,7 +251,7 @@ defmodule GrokMermaid.LayoutSeq do
 
     if from == to do
       # A stub that leaves the lifeline and returns two rows down.
-      x = Enum.at(xs, from)
+      x = elem(xs, from)
 
       canvas =
         canvas
@@ -257,8 +268,8 @@ defmodule GrokMermaid.LayoutSeq do
         do: Canvas.draw_text_over_edges(canvas, text, x + 5, r + 1, :text),
         else: canvas
     else
-      x0 = Enum.at(xs, from)
-      x1 = Enum.at(xs, to)
+      x0 = elem(xs, from)
+      x1 = elem(xs, to)
       rightward = x1 > x0
       arrow_row = if text != nil, do: r + 1, else: r
       lo = min(x0, x1)

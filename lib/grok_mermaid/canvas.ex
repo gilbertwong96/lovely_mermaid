@@ -401,7 +401,7 @@ defmodule GrokMermaid.Canvas do
 
   defp build_row(c, y, last) do
     {plain, spans, run, run_cls, run_tag, run_href} =
-      Enum.reduce(0..(last - 1)//1, {"", [], "", :none, nil, nil}, fn x, acc ->
+      Enum.reduce(0..(last - 1)//1, {[], [], [], :none, nil, nil}, fn x, acc ->
         i = y * c.w + x
         char = Map.get(c.ch, i, " ")
         cls = Map.get(c.cls, i, :none)
@@ -413,17 +413,25 @@ defmodule GrokMermaid.Canvas do
           char == @cont ->
             acc
 
-          (cls != run_cls or tag != run_tag or href != run_href) and run != "" ->
-            {plain <> char, spans ++ [span(run, run_cls, run_tag, run_href)], char, cls, tag,
-             href}
+          (cls != run_cls or tag != run_tag or href != run_href) and run != [] ->
+            {[char | plain],
+             [span(IO.iodata_to_binary(Enum.reverse(run)), run_cls, run_tag, run_href) | spans],
+             [char], cls, tag, href}
 
           true ->
-            {plain <> char, spans, run <> char, cls, tag, href}
+            {[char | plain], spans, [char | run], cls, tag, href}
         end
       end)
 
-    spans = if run != "", do: spans ++ [span(run, run_cls, run_tag, run_href)], else: spans
-    {String.trim_trailing(plain, " "), spans}
+    spans =
+      if run != [] do
+        [span(IO.iodata_to_binary(Enum.reverse(run)), run_cls, run_tag, run_href) | spans]
+      else
+        spans
+      end
+
+    plain = plain |> Enum.reverse() |> IO.iodata_to_binary() |> String.trim_trailing(" ")
+    {plain, Enum.reverse(spans)}
   end
 
   defp span(text, role, nil, nil), do: %{text: text, role: role}
@@ -446,12 +454,8 @@ defmodule GrokMermaid.Canvas do
     |> Enum.reverse()
   end
 
-  defp drop_leading_blank(rows) do
-    case rows do
-      [{plain, _, _} | rest] when plain == "" -> drop_leading_blank(rest)
-      _ -> rows
-    end
-  end
+  defp drop_leading_blank([{"", _, _} | rest]), do: drop_leading_blank(rest)
+  defp drop_leading_blank(rows), do: rows
 
   # --- helpers ---------------------------------------------------------
 

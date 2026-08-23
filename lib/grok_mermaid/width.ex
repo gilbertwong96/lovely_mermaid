@@ -1009,11 +1009,14 @@ defmodule GrokMermaid.Width do
   @spec code_point_width(integer()) :: non_neg_integer()
   def code_point_width(cp), do: lookup(@widths, cp)
 
-  defp lookup(runs, cp), do: do_lookup(runs, cp, 0, length(runs) - 1)
+  defp lookup(runs, cp) do
+    runs = List.to_tuple(runs)
+    do_lookup(runs, cp, 0, tuple_size(runs) - 1)
+  end
 
   defp do_lookup(runs, cp, lo, hi) when lo <= hi do
     mid = div(lo + hi, 2)
-    {l, h, w} = Enum.at(runs, mid)
+    {l, h, w} = elem(runs, mid)
 
     cond do
       cp < l -> do_lookup(runs, cp, lo, mid - 1)

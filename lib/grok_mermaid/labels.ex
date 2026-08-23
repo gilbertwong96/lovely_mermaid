@@ -57,16 +57,18 @@ defmodule GrokMermaid.Labels do
   @doc "Mermaid writes generics as `List~T~`; show them as `List<T>`."
   @spec display_generics(String.t()) :: String.t()
   def display_generics(s) do
-    s
-    |> String.graphemes()
-    |> Enum.reduce({"", false}, fn c, {out, open} ->
-      if c == "~" do
-        {out <> if(open, do: ">", else: "<"), not open}
-      else
-        {out <> c, open}
-      end
-    end)
-    |> elem(0)
+    {out, _} =
+      s
+      |> String.graphemes()
+      |> Enum.reduce({[], false}, fn c, {out, open} ->
+        if c == "~" do
+          {[if(open, do: ">", else: "<") | out], not open}
+        else
+          {[c | out], open}
+        end
+      end)
+
+    out |> Enum.reverse() |> IO.iodata_to_binary()
   end
 
   @doc "Strip ANSI SGR sequences and other control chars from a label."
@@ -139,32 +141,36 @@ defmodule GrokMermaid.Labels do
     if not String.contains?(s, "&") do
       s
     else
-      decode_pass(String.graphemes(s), 0, "")
+      decode_pass(String.graphemes(s), "")
     end
   end
 
-  defp decode_pass(chars, i, out) when i >= length(chars), do: out
+  defp decode_pass([], out), do: out
 
-  defp decode_pass(chars, i, out) do
-    if Enum.at(chars, i) != "&" do
-      decode_pass(chars, i + 1, out <> Enum.at(chars, i))
+  defp decode_pass([c | rest], out) do
+    if c != "&" do
+      decode_pass(rest, out <> c)
     else
-      hi = min(i + 1 + @entity_lookahead, length(chars))
-      semi = find_semi(chars, i + 1, hi)
-
-      body = if semi == -1, do: nil, else: Enum.slice(chars, i + 1, semi - i - 1) |> Enum.join()
+      {body, rest2} = take_entity(rest, [])
 
       case body && decode_entity_body(body) do
-        {:ok, decoded} -> decode_pass(chars, semi + 1, out <> decoded)
-        _ -> decode_pass(chars, i + 1, out <> "&")
+        {:ok, decoded} -> decode_pass(rest2, out <> decoded)
+        _ -> decode_pass(rest, out <> "&")
       end
     end
   end
 
-  defp find_semi(chars, from, hi) do
-    Enum.reduce_while(from..(hi - 1)//1, -1, fn j, _acc ->
-      if Enum.at(chars, j) == ";", do: {:halt, j}, else: {:cont, -1}
-    end)
+  # Up to @entity_lookahead chars until `;`; `nil` when none closes it.
+  defp take_entity(chars, acc) do
+    if length(acc) >= @entity_lookahead do
+      {nil, chars}
+    else
+      case chars do
+        [";" | rest] -> {acc |> Enum.reverse() |> IO.iodata_to_binary(), rest}
+        [c | rest] -> take_entity(rest, [c | acc])
+        [] -> {nil, []}
+      end
+    end
   end
 
   # --- Markdown / HTML stripping -------------------------------------------
@@ -174,17 +180,21 @@ defmodule GrokMermaid.Labels do
   def strip_markdown(s) do
     no_code = s |> String.graphemes() |> Enum.reject(&(&1 == "`")) |> Enum.join()
     no_strong = no_code |> String.replace("**", "") |> String.replace("__", "")
-    chars = String.graphemes(no_strong)
+    chars = no_strong |> String.graphemes() |> List.to_tuple()
 
     out =
-      Enum.with_index(chars)
-      |> Enum.reduce("", fn {c, i}, out ->
+      chars
+      |> Tuple.to_list()
+      |> Stream.with_index()
+      |> Enum.reduce([], fn {c, i}, out ->
         in_word =
-          i > 0 and is_alphanumeric(Enum.at(chars, i - 1)) and
-            i + 1 < length(chars) and is_alphanumeric(Enum.at(chars, i + 1))
+          i > 0 and is_alphanumeric(elem(chars, i - 1)) and
+            i + 1 < tuple_size(chars) and is_alphanumeric(elem(chars, i + 1))
 
-        if (c == "*" or c == "_") and not in_word, do: out, else: out <> c
+        if (c == "*" or c == "_") and not in_word, do: out, else: [c | out]
       end)
+      |> Enum.reverse()
+      |> IO.iodata_to_binary()
 
     String.trim(out)
   end
@@ -195,68 +205,64 @@ defmodule GrokMermaid.Labels do
   """
   @spec strip_html_tags(String.t()) :: String.t()
   def strip_html_tags(s) do
-    s |> String.graphemes() |> scan_tags(0, "")
+    s |> String.graphemes() |> scan_tags("")
   end
 
-  defp scan_tags(chars, i, out) when i >= length(chars), do: out
+  defp scan_tags([], out), do: out
 
-  defp scan_tags(chars, i, out) do
-    if Enum.at(chars, i) == "<" do
-      case html_tag_at(chars, i) do
-        {:ok, name, end_idx} ->
+  defp scan_tags([c | rest], out) do
+    if c == "<" do
+      case html_tag_at([c | rest]) do
+        {:ok, name, tail} ->
           cond do
-            String.downcase(name) == "br" -> scan_tags(chars, end_idx, out <> " ")
-            String.downcase(name) in @formatting_tags -> scan_tags(chars, end_idx, out)
-            true -> scan_tags(chars, i + 1, out <> "<")
+            String.downcase(name) == "br" -> scan_tags(tail, out <> " ")
+            String.downcase(name) in @formatting_tags -> scan_tags(tail, out)
+            true -> scan_tags(rest, out <> "<")
           end
 
         nil ->
-          scan_tags(chars, i + 1, out <> "<")
+          scan_tags(rest, out <> "<")
       end
     else
-      scan_tags(chars, i + 1, out <> Enum.at(chars, i))
+      scan_tags(rest, out <> c)
     end
   end
 
-  # Read a tag starting at `start`, returning its name and the index after
-  # the closing `>`.
-  defp html_tag_at(chars, start) do
-    i = start + 1
-    i = if Enum.at(chars, i) == "/", do: i + 1, else: i
-    name_start = i
+  # Read a tag at the head of `chars`, returning its name and the tail
+  # after the closing `>`.
+  defp html_tag_at(["<" | rest]) do
+    chars =
+      case rest do
+        ["/" | rest2] -> rest2
+        _ -> rest
+      end
 
-    i =
-      Enum.reduce_while(i..(length(chars) - 1)//1, i, fn _, acc ->
-        c = Enum.at(chars, acc)
+    {name_chars, rest} = take_tag_name(chars, [])
 
-        if c != nil and String.match?(c, ~r/^[0-9A-Za-z]$/) do
-          {:cont, acc + 1}
-        else
-          {:halt, acc}
-        end
-      end)
-
-    if i == name_start do
+    if name_chars == [] do
       nil
     else
-      name = Enum.slice(chars, name_start, i - name_start) |> Enum.join()
-
-      case scan_to_gt(chars, i) do
-        {:ok, gt} -> {:ok, name, gt + 1}
+      case scan_to_gt(rest) do
+        {:ok, tail} -> {:ok, name_chars |> Enum.reverse() |> IO.iodata_to_binary(), tail}
         :error -> nil
       end
     end
   end
 
-  defp scan_to_gt(chars, i) do
-    Enum.reduce_while(i..(length(chars) - 1)//1, :error, fn i, _ ->
-      case Enum.at(chars, i) do
-        ">" -> {:halt, {:ok, i}}
-        "<" -> {:halt, :error}
-        _ -> {:cont, :error}
-      end
-    end)
+  defp take_tag_name([c | rest], acc) do
+    if String.match?(c, ~r/^[0-9A-Za-z]$/) do
+      take_tag_name(rest, [c | acc])
+    else
+      {acc, [c | rest]}
+    end
   end
+
+  defp take_tag_name([], acc), do: {acc, []}
+
+  defp scan_to_gt([">" | rest]), do: {:ok, rest}
+  defp scan_to_gt(["<" | _]), do: :error
+  defp scan_to_gt([_ | rest]), do: scan_to_gt(rest)
+  defp scan_to_gt([]), do: :error
 
   defp unwrap(s, open, close) do
     if String.length(s) >= String.length(open) + String.length(close) and
@@ -351,39 +357,50 @@ defmodule GrokMermaid.Labels do
     end
   end
 
-  # Break an over-wide word after the last fitting identifier boundary,
-  # falling back to a per-character break when it has none.
   defp break_word(word, width, chunk, chunk_w) do
     {lines, chunk, chunk_w} =
-      Enum.reduce(Width.measured(word), {[], chunk, chunk_w}, fn {ch, cw},
-                                                                 {lines, chunk, chunk_w} ->
-        if chunk_w + cw > width and chunk != "" do
-          p = last_break(chunk)
+      Enum.reduce(Width.measured(word), {[], [chunk], chunk_w}, fn {ch, cw},
+                                                                   {lines, chunk, chunk_w} ->
+        if chunk_w + cw > width and chunk_w != 0 do
+          bin = chunk |> Enum.reverse() |> IO.iodata_to_binary()
+          p = last_break(bin)
 
-          carry = if p == -1, do: "", else: String.slice(chunk, (p + 1)..-1//1)
-          piece = if p == -1, do: chunk, else: String.slice(chunk, 0..p//1)
+          {carry, piece, carry_w} =
+            if p == -1 do
+              {[], bin, 0}
+            else
+              piece = String.slice(bin, 0..p//1)
 
-          # the current character joins the new chunk (TS: `chunk += ch` after the break)
-          {lines ++ [piece], carry <> ch, Width.string_width(carry) + cw}
+              carry =
+                bin
+                |> String.slice((p + 1)..-1//1)
+                |> String.graphemes()
+                |> Enum.reverse()
+
+              {carry, piece, chunk_w - Width.string_width(piece)}
+            end
+
+          {[piece | lines], [ch | carry], carry_w + cw}
         else
-          {lines, chunk <> ch, chunk_w + cw}
+          {lines, [ch | chunk], chunk_w + cw}
         end
       end)
 
-    {lines ++ [chunk], chunk, chunk_w}
+    chunk_bin = chunk |> Enum.reverse() |> IO.iodata_to_binary()
+    {Enum.reverse(lines, [chunk_bin]), chunk_bin, chunk_w}
   end
 
   defp fit_to_width(s, target) do
     {out, _} =
-      Enum.reduce_while(Width.measured(s), {"", 0}, fn {ch, cw}, {out, used} ->
+      Enum.reduce_while(Width.measured(s), {[], 0}, fn {ch, cw}, {out, used} ->
         if used + cw > target do
           {:halt, {out, used}}
         else
-          {:cont, {out <> ch, used + cw}}
+          {:cont, {[ch | out], used + cw}}
         end
       end)
 
-    out
+    out |> Enum.reverse() |> IO.iodata_to_binary()
   end
 
   @doc "Truncate to `inner` columns, leaving room for the ellipsis."
@@ -393,15 +410,15 @@ defmodule GrokMermaid.Labels do
       label
     else
       {out, _} =
-        Enum.reduce_while(Width.measured(label), {"", 0}, fn {c, cw}, {out, used} ->
+        Enum.reduce_while(Width.measured(label), {[], 0}, fn {c, cw}, {out, used} ->
           if used + cw + 1 > inner do
             {:halt, {out, used}}
           else
-            {:cont, {out <> c, used + cw}}
+            {:cont, {[c | out], used + cw}}
           end
         end)
 
-      out <> "…"
+      (out |> Enum.reverse() |> IO.iodata_to_binary()) <> "…"
     end
   end
 end

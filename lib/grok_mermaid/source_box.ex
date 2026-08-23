@@ -30,10 +30,11 @@ defmodule GrokMermaid.SourceBox do
         if not started and l == "" do
           {false, acc}
         else
-          {true, acc ++ chunk_line(l, limit)}
+          {true, Enum.reverse(chunk_line(l, limit), acc)}
         end
       end)
       |> elem(1)
+      |> Enum.reverse()
 
     content_w =
       [Width.string_width(title) | Enum.map(body, &Width.string_width/1)]
@@ -55,24 +56,24 @@ defmodule GrokMermaid.SourceBox do
     {plain, styled} =
       Enum.reduce(body, {plain, styled}, fn line, {plain, styled} ->
         pad = String.duplicate(" ", sat(content_w, Width.string_width(line)))
-        plain = plain ++ ["│ " <> line <> pad <> " │"]
+        plain = [IO.iodata_to_binary(["│ ", line, pad, " │"]) | plain]
 
         styled =
-          styled ++
+          [
             [
-              [
-                %{text: "│ ", role: :border},
-                %{text: line, role: :text},
-                %{text: pad <> " │", role: :border}
-              ]
+              %{text: "│ ", role: :border},
+              %{text: line, role: :text},
+              %{text: IO.iodata_to_binary([pad, " │"]), role: :border}
             ]
+            | styled
+          ]
 
         {plain, styled}
       end)
 
     bottom = "╰" <> String.duplicate("-", inner) <> "╯"
-    plain = plain ++ [bottom]
-    styled = styled ++ [[%{text: bottom, role: :border}]]
+    plain = Enum.reverse(plain, [bottom])
+    styled = Enum.reverse(styled, [[%{text: bottom, role: :border}]])
 
     %{plain: plain, styled: styled, width: inner + 2, class_defs: %{}, warnings: []}
   end
@@ -85,15 +86,16 @@ defmodule GrokMermaid.SourceBox do
       [line]
     else
       {out, cur, _} =
-        Enum.reduce(Width.measured(line), {[], "", 0}, fn {c, cw}, {out, cur, cur_w} ->
-          if cur_w + cw > limit and cur != "" do
-            {out ++ [cur], c, cw}
+        Enum.reduce(Width.measured(line), {[], [], 0}, fn {c, cw}, {out, cur, cur_w} ->
+          if cur_w + cw > limit and cur != [] do
+            {[cur |> Enum.reverse() |> IO.iodata_to_binary() | out], [c], cw}
           else
-            {out, cur <> c, cur_w + cw}
+            {out, [c | cur], cur_w + cw}
           end
         end)
 
-      if cur != "", do: out ++ [cur], else: out
+      cur_bin = cur |> Enum.reverse() |> IO.iodata_to_binary()
+      if cur != [], do: Enum.reverse([cur_bin | out]), else: Enum.reverse(out)
     end
   end
 end
