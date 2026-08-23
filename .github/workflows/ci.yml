@@ -71,6 +71,8 @@ jobs:
         run: mix deps.get
 
       - name: Generate coverage report
+        env:
+          MIX_ENV: test
         run: mix coveralls.cobertura
 
       - name: Upload coverage artifact
