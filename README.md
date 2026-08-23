@@ -20,13 +20,13 @@ end
 
 ## API
 
-| Function | Returns |
-|---|---|
-| `LovelyMermaid.render(src)` | `%LovelyMermaid.Art{}` (`plain`, `styled` [[span]], `width`, `class_defs`, `warnings`) or `nil` |
-| `LovelyMermaid.diagram_kind(src)` | `:flowchart \| :state \| :class \| :er \| :sequence \| :pie \| :mindmap \| :timeline \| :gitgraph \| nil` |
-| `LovelyMermaid.SourceBox.source_box(src, max_width \\ nil)` | Framed source lines, for when a diagram won't render |
-| `LovelyMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())` | ANSI-coloured lines from `art.styled` |
-| `LovelyMermaid.ClassStyle.resolve_class_style(classes, class_defs)` | Merged `classDef` style for a span, or `nil` |
+| Function                                                            | Returns                                                                                                   |
+|---------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `LovelyMermaid.render(src)`                                         | `%LovelyMermaid.Art{}` (`plain`, `styled` [[span]], `width`, `class_defs`, `warnings`) or `nil`           |
+| `LovelyMermaid.diagram_kind(src)`                                   | `:flowchart \| :state \| :class \| :er \| :sequence \| :pie \| :mindmap \| :timeline \| :gitgraph \| nil` |
+| `LovelyMermaid.SourceBox.source_box(src, max_width \\ nil)`         | Framed source lines, for when a diagram won't render                                                      |
+| `LovelyMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())`    | ANSI-coloured lines from `art.styled`                                                                     |
+| `LovelyMermaid.ClassStyle.resolve_class_style(classes, class_defs)` | Merged `classDef` style for a span, or `nil`                                                              |
 
 Each `span` in `styled` is a `LovelyMermaid.Span` — `%Span{text, role}`
 with `classes` (author-assigned names from `:::name` / `class A,B name`)

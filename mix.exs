@@ -2,7 +2,7 @@ defmodule LovelyMermaid.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/gilbertwong/lovely_mermaid"
+  @source_url "https://github.com/gilbertwong96/lovely_mermaid"
 
   def project do
     [
@@ -15,6 +15,9 @@ defmodule LovelyMermaid.MixProject do
 
       # Quality gates
       dialyzer: [plt_add_apps: [:mix]],
+
+      # Coverage
+      test_coverage: [tool: ExCoveralls],
 
       # Package
       description: "Render Mermaid diagrams as Unicode box-drawing art for terminals",
@@ -46,7 +49,8 @@ defmodule LovelyMermaid.MixProject do
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.8", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end
 
