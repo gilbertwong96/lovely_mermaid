@@ -112,6 +112,28 @@ defmodule GrokMermaidTest do
     assert joined =~ "◄╌╌╌"
   end
 
+  test "flowchart v2 @{shape: ...} nodes render with the mapped silhouette" do
+    assert render_plain("flowchart LR\n  A@{shape: cyl, label: \"DB\"} --> B") == [
+             "╭────╮    ┌───┐",
+             "│ DB ├───▶│ B │",
+             "╰────╯    └───┘"
+           ]
+  end
+
+  test "diamond nodes render as double-line boxes" do
+    assert render_plain("flowchart LR\n  A{Check} --> B") == [
+             "╔═══════╗    ┌───┐",
+             "║ Check ╟───▶│ B │",
+             "╚═══════╝    └───┘"
+           ]
+
+    assert render_plain("flowchart LR\n  A@{shape: diam} --> B") == [
+             "╔═══╗    ┌───┐",
+             "║ A ╟───▶│ B │",
+             "╚═══╝    └───┘"
+           ]
+  end
+
   test "LR branching routes through the bus" do
     assert render_plain("flowchart LR\n  A --> B\n  A --> C\n  B --> D\n  C --> D") == [
              "         ┌───┐",

@@ -1,7 +1,7 @@
 defmodule GrokMermaid.ParseTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid.{Graph, Parse}
+  alias GrokMermaid.Parse
 
   defp labels(g), do: Enum.map(g.nodes, & &1.label)
   defp shapes(g), do: Enum.map(g.nodes, & &1.shape)
@@ -49,6 +49,23 @@ defmodule GrokMermaid.ParseTest do
              {0, 1, nil, :arrow, :none, :solid},
              {1, 2, nil, :arrow, :none, :solid}
            ]
+  end
+
+  test "v2 @{shape: ...} node syntax reads shape and label" do
+    g = Parse.parse_graph("flowchart LR\n  A@{shape: cyl, label: \"DB\"} --> B")
+    assert labels(g) == ["DB", "B"]
+    assert shapes(g) == [:round, :rect]
+    assert g.warnings == []
+
+    g2 = Parse.parse_graph("flowchart LR\n  A@{shape: diam} --> B")
+    assert labels(g2) == ["A", "B"]
+    assert shapes(g2) == [:diamond, :rect]
+  end
+
+  test "an unclosed @{ body warns like any unterminated label" do
+    g = Parse.parse_graph("flowchart LR\n  A@{shape: cyl, label: \"DB\" --> B")
+    assert labels(g) == ["\"DB\" --> B"]
+    assert g.warnings == [~s(node "A": label is missing its closing `}`)]
   end
 
   test "quoted labels survive statement splitting" do

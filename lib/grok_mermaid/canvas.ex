@@ -61,6 +61,12 @@ defmodule GrokMermaid.Canvas do
     "└" => "┌",
     "┐" => "┘",
     "┘" => "┐",
+    "╔" => "╚",
+    "╚" => "╔",
+    "╗" => "╝",
+    "╝" => "╗",
+    "╤" => "╧",
+    "╧" => "╤",
     "┏" => "┗",
     "┗" => "┏",
     "┓" => "┛",
@@ -84,6 +90,12 @@ defmodule GrokMermaid.Canvas do
     "┐" => "┌",
     "└" => "┘",
     "┘" => "└",
+    "╔" => "╗",
+    "╗" => "╔",
+    "╚" => "╝",
+    "╝" => "╚",
+    "╟" => "╢",
+    "╢" => "╟",
     "┏" => "┓",
     "┓" => "┏",
     "┗" => "┛",
@@ -296,10 +308,29 @@ defmodule GrokMermaid.Canvas do
   def finalize_mask(c) do
     ch =
       Enum.reduce(c.mask, c.ch, fn {i, mask}, ch ->
-        if Map.get(ch, i, " ") == " ", do: Map.put(ch, i, styled_glyph(c, i, mask)), else: ch
+        cur = Map.get(ch, i, " ")
+
+        cond do
+          cur == " " -> Map.put(ch, i, styled_glyph(c, i, mask))
+          cur == "═" or cur == "║" -> Map.put(ch, i, double_tee(cur, mask))
+          true -> ch
+        end
       end)
 
     %{c | ch: ch}
+  end
+
+  # An edge teeing into a double-line border: the mixed single/double glyphs.
+  defp double_tee(c, mask) do
+    cond do
+      c == "═" and Bitwise.band(mask, @u) != 0 and Bitwise.band(mask, @d) != 0 -> "╪"
+      c == "═" and Bitwise.band(mask, @d) != 0 -> "╤"
+      c == "═" and Bitwise.band(mask, @u) != 0 -> "╧"
+      Bitwise.band(mask, @l) != 0 and Bitwise.band(mask, @r) != 0 -> "╫"
+      Bitwise.band(mask, @r) != 0 -> "╟"
+      Bitwise.band(mask, @l) != 0 -> "╢"
+      true -> c
+    end
   end
 
   defp styled_glyph(c, i, mask) do

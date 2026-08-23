@@ -873,14 +873,9 @@ defmodule GrokMermaid.Layout do
       end)
 
     group_chain = fn g ->
-      Enum.reduce_while(
-        Stream.iterate(g, fn cur -> Enum.at(graph.groups, cur).parent end),
-        [],
-        fn
-          nil, acc -> {:halt, acc}
-          cur, acc -> {:cont, [cur | acc]}
-        end
-      )
+      g
+      |> Stream.iterate(fn cur -> Enum.at(graph.groups, cur).parent end)
+      |> Enum.take_while(&(&1 != nil))
       |> Enum.reverse()
     end
 
@@ -940,7 +935,9 @@ defmodule GrokMermaid.Layout do
         has_nodes = Map.get(direct_nodes, gi, []) != []
 
         has_children =
-          Enum.any?(graph.groups, fn g -> g.parent == gi and MapSet.member?(keep, g.parent) end)
+          graph.groups
+          |> Enum.with_index()
+          |> Enum.any?(fn {g, gidx} -> g.parent == gi and MapSet.member?(keep, gidx) end)
 
         if has_nodes or has_children or MapSet.member?(referenced, gi) do
           MapSet.put(keep, gi)
@@ -1075,30 +1072,54 @@ defmodule GrokMermaid.Layout do
     h = p.h
     right = x + w - 1
     bottom = y + h - 1
-    rounded = shape in [:round, :diamond]
+
+    # A diamond is a double-line box — the terminal's nod to `A{...}`.
+    {tl, tr, bl, br} =
+      case shape do
+        :diamond -> {"╔", "╗", "╚", "╝"}
+        :round -> {"╭", "╮", "╰", "╯"}
+        _ -> {"┌", "┐", "└", "┘"}
+      end
 
     canvas =
       canvas
-      |> Canvas.set(x, y, if(rounded, do: "╭", else: "┌"), :border)
-      |> Canvas.set(right, y, if(rounded, do: "╮", else: "┐"), :border)
-      |> Canvas.set(x, bottom, if(rounded, do: "╰", else: "└"), :border)
-      |> Canvas.set(right, bottom, if(rounded, do: "╯", else: "┘"), :border)
-
-    # The perimeter is drawn as bits so edges can tee into it, but it is the
-    # box outline, so it claims `border` rather than `edge`.
-    canvas =
-      Enum.reduce((x + 1)..(right - 1)//1, canvas, fn cx, canvas ->
-        canvas
-        |> Canvas.add_bits(cx, y, 12, :border)
-        |> Canvas.add_bits(cx, bottom, 12, :border)
-      end)
+      |> Canvas.set(x, y, tl, :border)
+      |> Canvas.set(right, y, tr, :border)
+      |> Canvas.set(x, bottom, bl, :border)
+      |> Canvas.set(right, bottom, br, :border)
 
     canvas =
-      Enum.reduce((y + 1)..(bottom - 1)//1, canvas, fn cy, canvas ->
-        canvas
-        |> Canvas.add_bits(x, cy, 3, :border)
-        |> Canvas.add_bits(right, cy, 3, :border)
-      end)
+      if shape == :diamond do
+        # Double lines carry no direction bits; edges tee into them through
+        # the mixed junctions (`╤` `╧` `╟` `╢`) that `finalize_mask` resolves.
+        canvas =
+          Enum.reduce((x + 1)..(right - 1)//1, canvas, fn cx, canvas ->
+            canvas
+            |> Canvas.set(cx, y, "═", :border)
+            |> Canvas.set(cx, bottom, "═", :border)
+          end)
+
+        Enum.reduce((y + 1)..(bottom - 1)//1, canvas, fn cy, canvas ->
+          canvas
+          |> Canvas.set(x, cy, "║", :border)
+          |> Canvas.set(right, cy, "║", :border)
+        end)
+      else
+        # The perimeter is drawn as bits so edges can tee into it, but it is
+        # the box outline, so it claims `border` rather than `edge`.
+        canvas =
+          Enum.reduce((x + 1)..(right - 1)//1, canvas, fn cx, canvas ->
+            canvas
+            |> Canvas.add_bits(cx, y, 12, :border)
+            |> Canvas.add_bits(cx, bottom, 12, :border)
+          end)
+
+        Enum.reduce((y + 1)..(bottom - 1)//1, canvas, fn cy, canvas ->
+          canvas
+          |> Canvas.add_bits(x, cy, 3, :border)
+          |> Canvas.add_bits(right, cy, 3, :border)
+        end)
+      end
 
     canvas = occupy_box(canvas, x, y, right, bottom)
     inner = max(1, sat(w, 2 * @pad + 2))
@@ -1163,8 +1184,15 @@ defmodule GrokMermaid.Layout do
 
   defp draw_frame(canvas, p, title, sub) do
     canvas = draw_box(canvas, p, [], :rect)
-    t = Labels.fit_label(title, sat(p.w, 4))
-    canvas = Canvas.draw_text_over_edges(canvas, " " <> t <> " ", p.x + 1, p.y, :text)
+
+    canvas =
+      if title != "" do
+        t = Labels.fit_label(title, sat(p.w, 4))
+        Canvas.draw_text_over_edges(canvas, " " <> t <> " ", p.x + 1, p.y, :text)
+      else
+        canvas
+      end
+
     Canvas.blit(canvas, sub, p.x + 1 + half(p.w - 2 - sub.w), p.y + 1 + half(p.h - 2 - sub.h))
   end
 

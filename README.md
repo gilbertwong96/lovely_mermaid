@@ -42,9 +42,12 @@ dropping the final line, so streaming sources stay on screen).
 
 ## Supported diagrams
 
-`graph`/`flowchart` (including `subgraph`), `stateDiagram`, `classDiagram`,
-`erDiagram`, `sequenceDiagram`, `pie`, `mindmap`, `timeline`, `gitGraph` —
-mirroring grok-mermaid (lovely-mermaid).
+`graph`/`flowchart` (including `subgraph`), `stateDiagram`,
+`classDiagram`, `erDiagram`, `sequenceDiagram`, `pie`, `mindmap`, `timeline`,
+`gitGraph` — mirroring grok-mermaid (lovely-mermaid). Flowchart nodes accept
+both the v1 shape brackets and the v2 `id@{shape: …, label: …}` syntax;
+`state X { … }` composites nest as frames with `--` region dividers; diamond
+nodes draw as double-line boxes with mixed edge tees.
 
 ## Porting notes
 

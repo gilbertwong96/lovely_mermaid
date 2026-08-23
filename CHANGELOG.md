@@ -8,6 +8,12 @@ Initial release: Elixir port of [grok-mermaid](https://github.com/xl0/grok-merma
 - Diagram kinds: `flowchart`/`graph` (incl. `subgraph`), `stateDiagram`,
   `classDiagram`, `erDiagram`, `sequenceDiagram`, `pie`, `mindmap`,
   `timeline`, `gitGraph`
+- Flowchart v2 node syntax `id@{shape: …, label: …}` (27 shape names →
+  round/diamond/rect silhouettes); diamond nodes render as double-line boxes
+  with mixed `╤`/`╧`/`╟`/`╢` edge tees
+- `state X { … }` composites as nested frames; `--` splits a composite into
+  unlabelled sibling region frames
+- Sequence `Note` anchors auto-register the participants they name
 - `classDef` styles, `:::name` / `class A,B name` author classes, `click`/
   `link` hrefs — carried on styled spans, styled by `Ansi.to_ansi/2` (incl.
   OSC 8 hyperlinks)

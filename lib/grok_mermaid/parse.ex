@@ -681,6 +681,7 @@ defmodule GrokMermaid.Parse do
     n = Enum.at(chars, i + 1)
 
     cond do
+      c == "@" and n == "{" -> read_at_shape(chars, i + 2)
       c == "[" and n == "[" -> read_shape(chars, i + 2, "]]", :rect)
       c == "[" and n == "(" -> read_shape(chars, i + 2, ")]", :round)
       c == "[" -> read_shape(chars, i + 1, "]", :rect)
@@ -692,6 +693,123 @@ defmodule GrokMermaid.Parse do
       c == ">" -> read_shape(chars, i + 1, "]", :rect)
       true -> %{shape: :rect, label: nil, after: i}
     end
+  end
+
+  # Flowchart v2 shape names that read as something other than a plain box.
+  # The terminal has three silhouettes; any name not listed means "some kind
+  # of box" and maps to `:rect`, as in the TS reference.
+  @at_shapes %{
+    "rounded" => :round,
+    "stadium" => :round,
+    "pill" => :round,
+    "terminal" => :round,
+    "cyl" => :round,
+    "cylinder" => :round,
+    "database" => :round,
+    "db" => :round,
+    "circle" => :round,
+    "circ" => :round,
+    "sm-circ" => :round,
+    "small-circle" => :round,
+    "dbl-circ" => :round,
+    "double-circle" => :round,
+    "fr-circ" => :round,
+    "framed-circle" => :round,
+    "start" => :round,
+    "stop" => :round,
+    "event" => :round,
+    "delay" => :round,
+    "cloud" => :round,
+    "bang" => :round,
+    "diam" => :diamond,
+    "diamond" => :diamond,
+    "decision" => :diamond,
+    "question" => :diamond,
+    "hex" => :diamond,
+    "hexagon" => :diamond,
+    "prepare" => :diamond
+  }
+
+  # The v2 node syntax `id@{shape: cyl, label: "..."}`, cursor past the `@{`.
+  # The body is `key: value` pairs split on top-level commas; quoted values
+  # may contain commas and `}`. Unknown keys are ignored, unknown shapes
+  # draw as a plain box, and a body that never closes reports itself like any
+  # unterminated label bracket.
+  defp read_at_shape(chars, start) do
+    {body, i, closed} = scan_at_shape(chars, start, "", 0, false)
+
+    {shape, label} =
+      Enum.reduce(split_at_top(body, ","), {:rect, nil}, fn pair, {shape, label} ->
+        case String.split(pair, ":", parts: 2) do
+          [k, v] ->
+            key = Labels.ascii_lower(String.trim(k))
+
+            cond do
+              key == "shape" ->
+                {Map.get(@at_shapes, Labels.ascii_lower(String.trim(v)), :rect), label}
+
+              key == "label" ->
+                cleaned = Labels.clean_label(v)
+                {shape, if(String.trim(cleaned) == "", do: nil, else: cleaned)}
+
+              true ->
+                {shape, label}
+            end
+
+          _ ->
+            {shape, label}
+        end
+      end)
+
+    if closed do
+      %{shape: shape, label: label, after: i + 1}
+    else
+      %{shape: shape, label: label, after: length(chars), unclosed: "}"}
+    end
+  end
+
+  defp scan_at_shape(chars, i, text, depth, in_quotes) do
+    if i >= length(chars) do
+      {text, i, false}
+    else
+      c = Enum.at(chars, i)
+
+      cond do
+        in_quotes and c == "\"" ->
+          scan_at_shape(chars, i + 1, text <> c, depth, false)
+
+        not in_quotes and c == "\"" ->
+          scan_at_shape(chars, i + 1, text <> c, depth, true)
+
+        not in_quotes and c == "{" ->
+          scan_at_shape(chars, i + 1, text <> c, depth + 1, false)
+
+        not in_quotes and c == "}" ->
+          if depth == 0 do
+            {text, i, true}
+          else
+            scan_at_shape(chars, i + 1, text <> c, depth - 1, false)
+          end
+
+        true ->
+          scan_at_shape(chars, i + 1, text <> c, depth, in_quotes)
+      end
+    end
+  end
+
+  # Split a v2 body on separators that sit outside quoted runs.
+  defp split_at_top(body, sep) do
+    {parts, cur, _} =
+      Enum.reduce(String.graphemes(body), {[], "", false}, fn c, {parts, cur, in_quotes} ->
+        cond do
+          in_quotes and c == "\"" -> {parts, cur <> c, false}
+          not in_quotes and c == "\"" -> {parts, cur <> c, true}
+          not in_quotes and c == sep -> {parts ++ [cur], "", false}
+          true -> {parts, cur <> c, in_quotes}
+        end
+      end)
+
+    parts ++ [cur]
   end
 
   # Read label text up to `closer`. Quoting is decided by the first
@@ -878,61 +996,182 @@ defmodule GrokMermaid.Parse do
       graph = Graph.new()
 
       {graph, _in_note, assigns} =
-        parse_state_statements(Enum.drop(statements, 1), graph, false, [])
+        parse_state_statements(Enum.drop(statements, 1), graph, false, [], [])
 
       graph = Graph.apply_classes(graph, assigns)
       if graph.over_cap or graph.nodes == [], do: nil, else: graph
     end
   end
 
-  defp parse_state_statements([], graph, _in_note, assigns), do: {graph, false, assigns}
+  defp parse_state_statements([], graph, _in_note, assigns, _stack), do: {graph, false, assigns}
 
-  defp parse_state_statements([st | rest], graph, in_note, assigns) do
+  defp parse_state_statements([st | rest], graph, in_note, assigns, stack) do
     if in_note do
-      parse_state_statements(rest, graph, Labels.ascii_lower(st) != "end note", assigns)
+      parse_state_statements(rest, graph, Labels.ascii_lower(st) != "end note", assigns, stack)
     else
       first = Labels.ascii_lower(first_word(st))
+      first_len = String.length(first_word(st))
+      rest_str = st |> String.slice(first_len..-1//1) |> String.trim()
 
       cond do
         first == "direction" ->
           graph = %{graph | dir: Graph.parse_dir(st |> words() |> Enum.at(1) || "")}
-          parse_state_statements(rest, graph, false, assigns)
+          parse_state_statements(rest, graph, false, assigns, stack)
 
         first == "note" ->
           # A single-line `note ... : text` needs no terminator.
           in_note = not String.contains?(st, ":")
-          parse_state_statements(rest, graph, in_note, assigns)
+          parse_state_statements(rest, graph, in_note, assigns, stack)
+
+        first == "state" and String.ends_with?(rest_str, "{") ->
+          body = rest_str |> String.slice(0..-2//1) |> String.trim()
+          named = state_composite_name(body)
+
+          graph =
+            if named == nil do
+              warn(graph, "dropped, unreadable statement: \"#{st}\"")
+            else
+              graph
+            end
+
+          {id, label} = named || {"anon #{length(graph.groups)}", ""}
+
+          case state_new_group(graph, id, label, graph.cur_group) do
+            nil ->
+              parse_state_statements(rest, %{graph | over_cap: true}, false, assigns, stack)
+
+            {graph, gi} ->
+              graph = %{graph | cur_group: gi}
+              parse_state_statements(rest, graph, false, assigns, [{gi, nil} | stack])
+          end
 
         first == "state" ->
           case parse_state_decl(st, graph) do
             nil -> {%{graph | over_cap: true}, false, assigns}
-            graph -> parse_state_statements(rest, graph, false, assigns)
+            graph -> parse_state_statements(rest, graph, false, assigns, stack)
           end
 
         first == "classdef" ->
-          parse_state_statements(rest, parse_class_def(st, graph), false, assigns)
+          parse_state_statements(rest, parse_class_def(st, graph), false, assigns, stack)
 
         first == "class" ->
           case parse_class_assign(st) do
-            nil -> parse_state_statements(rest, graph, false, assigns)
-            assign -> parse_state_statements(rest, graph, false, assigns ++ [assign])
+            nil -> parse_state_statements(rest, graph, false, assigns, stack)
+            assign -> parse_state_statements(rest, graph, false, assigns ++ [assign], stack)
           end
 
-        first in ["hide", "scale", "}", "--"] ->
-          parse_state_statements(rest, graph, false, assigns)
+        first in ["hide", "scale"] ->
+          parse_state_statements(rest, graph, false, assigns, stack)
+
+        first == "}" ->
+          case stack do
+            [_top | rest_stack] ->
+              graph = %{graph | cur_group: state_scope_of(rest_stack)}
+              parse_state_statements(rest, graph, false, assigns, rest_stack)
+
+            [] ->
+              parse_state_statements(rest, graph, false, assigns, stack)
+          end
+
+        first == "--" ->
+          case stack do
+            [{base, nil} | rest_stack] ->
+              # First region divider: members so far move into region 1, then
+              # every divider opens the next unlabelled sibling region.
+              case state_new_group(graph, "region #{length(graph.groups)}", "", base) do
+                nil ->
+                  {%{graph | over_cap: true}, false, assigns}
+
+                {graph, r1} ->
+                  graph = %{
+                    graph
+                    | node_group:
+                        Enum.map(graph.node_group, fn g -> if g == base, do: r1, else: g end),
+                      groups:
+                        graph.groups
+                        |> Enum.with_index()
+                        |> Enum.map(fn {g, gi} ->
+                          if gi != r1 and g.parent == base, do: %{g | parent: r1}, else: g
+                        end)
+                  }
+
+                  state_open_region(graph, base, rest, assigns, rest_stack)
+              end
+
+            [{base, _} | rest_stack] ->
+              state_open_region(graph, base, rest, assigns, rest_stack)
+
+            [] ->
+              parse_state_statements(rest, graph, false, assigns, stack)
+          end
 
         String.contains?(st, "-->") ->
           case parse_transition(st, graph) do
             nil -> {%{graph | over_cap: true}, false, assigns}
-            graph -> parse_state_statements(rest, graph, false, assigns)
+            graph -> parse_state_statements(rest, graph, false, assigns, stack)
           end
 
         true ->
           case parse_state_desc(st, graph) do
             nil -> {%{graph | over_cap: true}, false, assigns}
-            graph -> parse_state_statements(rest, graph, false, assigns)
+            graph -> parse_state_statements(rest, graph, false, assigns, stack)
           end
       end
+    end
+  end
+
+  # `state X {` / `state "Label" as X {` — the id/label of a composite body.
+  defp state_composite_name(body) do
+    if String.starts_with?(body, "\"") do
+      case String.split(String.slice(body, 1..-1//1), "\"", parts: 2) do
+        [label, tail] ->
+          tail = String.trim(tail)
+
+          {id, _classes} =
+            take_tags(
+              if(String.starts_with?(tail, "as"),
+                do: String.trim(String.replace_prefix(tail, "as", "")),
+                else: label
+              )
+            )
+
+          if id == "", do: nil, else: {id, Labels.decode_html_entities(label)}
+
+        _ ->
+          nil
+      end
+    else
+      {id, _classes} = body |> String.split("<<") |> hd() |> String.trim() |> take_tags()
+      if id == "" or String.match?(id, ~r/\s/), do: nil, else: {id, id}
+    end
+  end
+
+  # Open the next unlabelled sibling region of a composite; `rest_stack`
+  # keeps the stack entry pointing at the new region.
+  defp state_open_region(graph, base, rest, assigns, rest_stack) do
+    case state_new_group(graph, "region #{length(graph.groups)}", "", base) do
+      nil ->
+        {%{graph | over_cap: true}, false, assigns}
+
+      {graph, next} ->
+        graph = %{graph | cur_group: next}
+        parse_state_statements(rest, graph, false, assigns, [{base, next} | rest_stack])
+    end
+  end
+
+  defp state_new_group(graph, id, label, parent) do
+    if length(graph.groups) >= Graph.max_groups() do
+      nil
+    else
+      groups = graph.groups ++ [%{id: id, label: label, parent: parent}]
+      {%{graph | groups: groups}, length(groups) - 1}
+    end
+  end
+
+  defp state_scope_of(stack) do
+    case stack do
+      [{base, region} | _] -> region || base
+      [] -> nil
     end
   end
 
@@ -1942,22 +2181,15 @@ defmodule GrokMermaid.Parse do
                 if kind != :over do
                   {seq, text, {kind, a}}
                 else
-                  b =
-                    case Enum.at(parts, 1) do
-                      nil ->
-                        a
+                  case Enum.at(parts, 1) do
+                    nil ->
+                      {seq, text, {:over, a, a}}
 
-                      second ->
-                        case Sequence.participant(seq, second, nil) do
-                          {_seq, nil} -> nil
-                          {_seq, s} -> s
-                        end
-                    end
-
-                  if b == nil do
-                    nil
-                  else
-                    {seq, text, {:over, min(a, b), max(a, b)}}
+                    second ->
+                      case Sequence.participant(seq, second, nil) do
+                        {_seq, nil} -> nil
+                        {seq, s} -> {seq, text, {:over, min(a, s), max(a, s)}}
+                      end
                   end
                 end
             end

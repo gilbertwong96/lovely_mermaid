@@ -5,7 +5,7 @@ defmodule GrokMermaid.CoverageTest do
   use ExUnit.Case, async: true
 
   alias GrokMermaid
-  alias GrokMermaid.{Canvas, Labels, SourceBox, Width}
+  alias GrokMermaid.{Canvas, Labels, SourceBox}
 
   # ---------------------------------------------------------------- entry
 
@@ -230,6 +230,19 @@ defmodule GrokMermaid.CoverageTest do
     assert joined =~ "righty"
   end
 
+  test "a note registers participants not otherwise declared" do
+    art = GrokMermaid.render("sequenceDiagram\n  Note over A,B: hello")
+    assert art != nil
+    joined = Enum.join(art.plain, "\n")
+    assert joined =~ "│ A │"
+    assert joined =~ "│ B │"
+    assert joined =~ "hello"
+
+    left = GrokMermaid.render("sequenceDiagram\n  Note left of A: hi")
+    assert left != nil
+    assert Enum.join(left.plain, "\n") =~ "hi"
+  end
+
   test "sequence autonumber prefixes messages" do
     art =
       GrokMermaid.render("""
@@ -295,6 +308,43 @@ defmodule GrokMermaid.GrammarTableTest do
 
     assert art != nil
     assert Enum.join(art.plain, "\n") =~ "C"
+  end
+
+  test "state composite renders as a nested frame" do
+    art =
+      GrokMermaid.render("""
+      stateDiagram-v2
+        state X {
+          A --> B
+        }
+      """)
+
+    assert art != nil
+    joined = Enum.join(art.plain, "\n")
+    # X is a titled rect frame, not a flat round node beside A and B.
+    assert joined =~ "┌ X"
+    assert joined =~ "└─"
+    assert joined =~ "│ A │"
+    assert joined =~ "│ B │"
+  end
+
+  test "state -- splits a composite into region frames" do
+    art =
+      GrokMermaid.render("""
+      stateDiagram-v2
+        state X {
+          A --> B
+          --
+          C --> D
+        }
+      """)
+
+    assert art != nil
+    joined = Enum.join(art.plain, "\n")
+    # Two unlabelled region frames side by side inside X.
+    assert joined =~ "│ A │"
+    assert joined =~ "│ C │"
+    assert String.contains?(joined, "││")
   end
 
   test "state hide and scale directives are ignored" do
