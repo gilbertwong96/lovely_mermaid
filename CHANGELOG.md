@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-Initial release: Elixir port of [grok-mermaid](https://github.com/xl0/grok-mermaid).
+Initial release: Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid) (formerly grok-mermaid).
 
-- `GrokMermaid.render/1` — render Mermaid diagrams as Unicode box-drawing art
+- `LovelyMermaid.render/1` — render Mermaid diagrams as Unicode box-drawing art
 - Diagram kinds: `flowchart`/`graph` (incl. `subgraph`), `stateDiagram`,
   `classDiagram`, `erDiagram`, `sequenceDiagram`, `pie`, `mindmap`,
   `timeline`, `gitGraph`
@@ -19,5 +19,5 @@ Initial release: Elixir port of [grok-mermaid](https://github.com/xl0/grok-merma
   OSC 8 hyperlinks)
 - YAML frontmatter `title:` centred above the art
 - Warning/retry strategy for streaming sources
-- `GrokMermaid.SourceBox.source_box/2` — framed-source fallback
-- `GrokMermaid.Ansi.to_ansi/2` — ANSI-coloured output
+- `LovelyMermaid.SourceBox.source_box/2` — framed-source fallback
+- `LovelyMermaid.Ansi.to_ansi/2` — ANSI-coloured output

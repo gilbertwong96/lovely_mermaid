@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Pie do
+defmodule LovelyMermaid.Pie do
   @moduledoc """
   `pie`: proportions as a labelled bar list, ported from grok-mermaid's
   pie.ts. A terminal has no circle worth drawing; bars carry the same
@@ -6,7 +6,7 @@ defmodule GrokMermaid.Pie do
   and recorded in `warnings`.
   """
 
-  alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
+  alias LovelyMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   # Columns of the full-scale bar; eighth blocks refine below one cell.
   @bar_w 20

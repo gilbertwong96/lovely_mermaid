@@ -1,7 +1,7 @@
-defmodule GrokMermaid.ParseTest do
+defmodule LovelyMermaid.ParseTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid.Parse
+  alias LovelyMermaid.Parse
 
   defp labels(g), do: Enum.map(g.nodes, & &1.label)
   defp shapes(g), do: Enum.map(g.nodes, & &1.shape)
@@ -107,7 +107,7 @@ defmodule GrokMermaid.ParseTest do
       """)
 
     assert labels(g) == ["A", "B", "C"]
-    assert g.groups == [%GrokMermaid.Graph.Group{id: "one", label: "Group One", parent: nil}]
+    assert g.groups == [%LovelyMermaid.Graph.Group{id: "one", label: "Group One", parent: nil}]
 
     assert plain_edges(g) == [
              {0, 1, nil, :arrow, :none, :solid},

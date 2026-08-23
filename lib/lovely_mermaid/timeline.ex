@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Timeline do
+defmodule LovelyMermaid.Timeline do
   @moduledoc """
   `timeline`: periods and their events as a vertical list — one row per
   event, the period named on its first row, ported from grok-mermaid's
@@ -6,7 +6,7 @@ defmodule GrokMermaid.Timeline do
   in `warnings`.
   """
 
-  alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
+  alias LovelyMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   defmodule Row do
     @moduledoc false

@@ -1,7 +1,7 @@
-defmodule GrokMermaid.CanvasTest do
+defmodule LovelyMermaid.CanvasTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid.Canvas
+  alias LovelyMermaid.Canvas
 
   defp lines(c), do: c |> Canvas.finalize_mask() |> Canvas.to_lines() |> elem(0)
 
@@ -73,8 +73,8 @@ defmodule GrokMermaid.CanvasTest do
 
     assert styled == [
              [
-               %GrokMermaid.Span{text: " ", role: :none},
-               %GrokMermaid.Span{text: "中a", role: :text}
+               %LovelyMermaid.Span{text: " ", role: :none},
+               %LovelyMermaid.Span{text: "中a", role: :text}
              ]
            ]
   end

@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Layout do
+defmodule LovelyMermaid.Layout do
   @moduledoc """
   Graph layout: rank, order, place, route, draw. Ported from
   grok-mermaid's layout.ts.
@@ -11,7 +11,7 @@ defmodule GrokMermaid.Layout do
   canvas, so text never ends up mirrored.
   """
 
-  alias GrokMermaid.{Canvas, Labels, Width}
+  alias LovelyMermaid.{Canvas, Labels, Width}
 
   # Cells of padding between a box border and its text.
   @pad 1
@@ -71,7 +71,7 @@ defmodule GrokMermaid.Layout do
   Back edges (those closing a cycle) are excluded by a DFS colouring pass,
   so `A --> B --> C --> A` still ranks 0, 1, 2 rather than diverging.
   """
-  @spec compute_ranks(GrokMermaid.Graph.t()) :: %{non_neg_integer() => non_neg_integer()}
+  @spec compute_ranks(LovelyMermaid.Graph.t()) :: %{non_neg_integer() => non_neg_integer()}
   def compute_ranks(graph) do
     n = length(graph.nodes)
     ids = 0..(n - 1)
@@ -150,7 +150,7 @@ defmodule GrokMermaid.Layout do
   sweeps): alternate down/up passes sort each rank by the mean position of
   its neighbours, keeping whichever ordering crossed least.
   """
-  @spec order_ranks([[non_neg_integer()]], [GrokMermaid.Graph.edge()], %{
+  @spec order_ranks([[non_neg_integer()]], [LovelyMermaid.Graph.edge()], %{
           non_neg_integer() => non_neg_integer()
         }) :: [[non_neg_integer()]]
   def order_ranks(by_rank, edges, ranks) do
@@ -239,9 +239,13 @@ defmodule GrokMermaid.Layout do
   end
 
   @doc "Count crossings between adjacent ranks."
-  @spec count_crossings([GrokMermaid.Graph.edge()], %{non_neg_integer() => non_neg_integer()}, %{
-          non_neg_integer() => non_neg_integer()
-        }) :: non_neg_integer()
+  @spec count_crossings(
+          [LovelyMermaid.Graph.edge()],
+          %{non_neg_integer() => non_neg_integer()},
+          %{
+            non_neg_integer() => non_neg_integer()
+          }
+        ) :: non_neg_integer()
   def count_crossings(edges, ranks, pos) do
     adjacent =
       Enum.filter(edges, fn e ->
@@ -274,7 +278,7 @@ defmodule GrokMermaid.Layout do
           [[non_neg_integer()]],
           tuple(),
           non_neg_integer(),
-          [GrokMermaid.Graph.edge()],
+          [LovelyMermaid.Graph.edge()],
           %{non_neg_integer() => non_neg_integer()}
         ) :: %{non_neg_integer() => non_neg_integer()}
   def assign_positions(by_rank, size, sep, edges, ranks) do
@@ -643,8 +647,8 @@ defmodule GrokMermaid.Layout do
   # -------------------------------------------------------------------- canvas
 
   @doc "Rank, place, draw and route a graph onto a fresh canvas."
-  @spec layout_canvas(GrokMermaid.Graph.t(), [extra()]) :: Canvas.t() | nil
-  def layout_canvas(%GrokMermaid.Graph{nodes: []}, _extras), do: nil
+  @spec layout_canvas(LovelyMermaid.Graph.t(), [extra()]) :: Canvas.t() | nil
+  def layout_canvas(%LovelyMermaid.Graph{nodes: []}, _extras), do: nil
 
   def layout_canvas(graph, extras) do
     n = length(graph.nodes)
@@ -864,7 +868,7 @@ defmodule GrokMermaid.Layout do
   end
 
   @doc "Apply the direction flip a finished canvas needs for `BT` / `RL`."
-  @spec orient(Canvas.t(), GrokMermaid.Graph.t()) :: Canvas.t()
+  @spec orient(Canvas.t(), LovelyMermaid.Graph.t()) :: Canvas.t()
   def orient(canvas, graph) do
     cond do
       graph.dir == :up -> Canvas.flip_vertical(canvas)
@@ -874,7 +878,7 @@ defmodule GrokMermaid.Layout do
   end
 
   @doc "Flowchart and state diagrams: plain boxes, no extra content."
-  @spec layout_flowchart(GrokMermaid.Graph.t()) :: Canvas.t() | nil
+  @spec layout_flowchart(LovelyMermaid.Graph.t()) :: Canvas.t() | nil
   def layout_flowchart(graph) do
     extras = Enum.map(graph.nodes, fn _ -> %{kind: :plain} end)
     canvas = layout_canvas(graph, extras)
@@ -891,7 +895,7 @@ defmodule GrokMermaid.Layout do
   defp group_key(g), do: "g#{g}"
 
   @doc "Subgraph frames nested inside each other, edges routed per scope."
-  @spec layout_grouped(GrokMermaid.Graph.t()) :: Canvas.t() | nil
+  @spec layout_grouped(LovelyMermaid.Graph.t()) :: Canvas.t() | nil
   def layout_grouped(graph) do
     # A node whose id matches a subgraph id stands in for that subgraph.
     proxy =
@@ -993,7 +997,7 @@ defmodule GrokMermaid.Layout do
     end
   end
 
-  defp build_scope(%GrokMermaid.Graph{} = graph, scope, scope_edges, direct_nodes, keep) do
+  defp build_scope(%LovelyMermaid.Graph{} = graph, scope, scope_edges, direct_nodes, keep) do
     items =
       Enum.map(Map.get(direct_nodes, scope, []), &node_key/1) ++
         (Enum.with_index(graph.groups)
@@ -1019,7 +1023,7 @@ defmodule GrokMermaid.Layout do
             node = elem(nodes_t, i)
 
             {[
-               %GrokMermaid.Graph.Node{
+               %LovelyMermaid.Graph.Node{
                  label: node.label,
                  shape: node.shape,
                  classes: Map.get(node, :classes, []),
@@ -1034,7 +1038,7 @@ defmodule GrokMermaid.Layout do
 
               sub ->
                 {[
-                   %GrokMermaid.Graph.Node{
+                   %LovelyMermaid.Graph.Node{
                      label: elem(groups_t, i).label,
                      shape: :rect,
                      classes: [],
@@ -1065,7 +1069,7 @@ defmodule GrokMermaid.Layout do
                 e = elem(edges_t, ei)
 
                 [
-                  %GrokMermaid.Graph.Edge{
+                  %LovelyMermaid.Graph.Edge{
                     from: fi,
                     to: ti,
                     label: e.label,
@@ -1078,14 +1082,15 @@ defmodule GrokMermaid.Layout do
             end
           end)
 
-        synth = %GrokMermaid.Graph{graph | nodes: nodes, edges: edges}
+        synth = %LovelyMermaid.Graph{graph | nodes: nodes, edges: edges}
         layout_canvas(synth, extras)
       end
     end
   end
 
   @doc "Class and ER diagrams: boxes divided into title / attribute / method rows."
-  @spec layout_class(GrokMermaid.Graph.t(), [GrokMermaid.Graph.class_info()]) :: Canvas.t() | nil
+  @spec layout_class(LovelyMermaid.Graph.t(), [LovelyMermaid.Graph.class_info()]) ::
+          Canvas.t() | nil
   def layout_class(graph, infos) do
     infos_t = List.to_tuple(infos)
 
@@ -1114,7 +1119,7 @@ defmodule GrokMermaid.Layout do
   # ------------------------------------------------------------------- drawing
 
   @doc "Draw a box with its label lines and shape."
-  @spec draw_box(Canvas.t(), placed(), [String.t()], GrokMermaid.Graph.shape()) :: Canvas.t()
+  @spec draw_box(Canvas.t(), placed(), [String.t()], LovelyMermaid.Graph.shape()) :: Canvas.t()
   def draw_box(canvas, p, lines, shape) do
     x = p.x
     y = p.y

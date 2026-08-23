@@ -1,11 +1,11 @@
-defmodule GrokMermaid.SourceBox do
+defmodule LovelyMermaid.SourceBox do
   @moduledoc """
   The raw source in a framed box, ported from grok-mermaid's
   source-box.ts. What to show when `render` returns `nil`, or returns art
   too wide for the space at hand.
   """
 
-  alias GrokMermaid.{Art, Labels, Span, Width}
+  alias LovelyMermaid.{Art, Labels, Span, Width}
 
   defp sat(a, b), do: max(0, a - b)
 

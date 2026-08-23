@@ -1,7 +1,7 @@
-defmodule GrokMermaid.WidthTest do
+defmodule LovelyMermaid.WidthTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid.Width
+  alias LovelyMermaid.Width
 
   test "ascii and CJK widths" do
     assert Width.string_width("a") == 1

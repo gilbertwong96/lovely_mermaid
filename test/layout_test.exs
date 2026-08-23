@@ -1,7 +1,7 @@
-defmodule GrokMermaid.LayoutTest do
+defmodule LovelyMermaid.LayoutTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid.{Canvas, Layout, Parse}
+  alias LovelyMermaid.{Canvas, Layout, Parse}
 
   defp render_plain(src) do
     graph = Parse.parse_graph(src)

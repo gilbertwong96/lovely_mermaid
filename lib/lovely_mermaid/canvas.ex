@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Canvas do
+defmodule LovelyMermaid.Canvas do
   @moduledoc """
   A grid of cells, ported from grok-mermaid's canvas.ts.
 
@@ -9,7 +9,7 @@ defmodule GrokMermaid.Canvas do
   not overwrite.
   """
 
-  alias GrokMermaid.{Span, Width}
+  alias LovelyMermaid.{Span, Width}
 
   # Sentinel occupying the trailing column of a wide glyph. Never emitted:
   # the line builder skips it, so a CJK character claims two cells of

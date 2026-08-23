@@ -1,4 +1,4 @@
-defmodule GrokMermaid.ClassStyle do
+defmodule LovelyMermaid.ClassStyle do
   @moduledoc """
   Best-effort interpretation of `classDef` styles for a cell grid, ported
   from grok-mermaid's class-style.ts and css-colors.ts.

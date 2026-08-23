@@ -1,11 +1,11 @@
-# GrokMermaid
+# LovelyMermaid
 
-Elixir port of [grok-mermaid](https://github.com/xl0/grok-mermaid) — render
+Elixir port of [lovely-mermaid](https://github.com/xl0/lovely-mermaid) (formerly grok-mermaid) — render
 Mermaid diagrams as Unicode box-drawing art for terminals.
 
 ```elixir
-GrokMermaid.render("flowchart LR\n  A[Start] --> B[Done]")
-# => %GrokMermaid.Art{
+LovelyMermaid.render("flowchart LR\n  A[Start] --> B[Done]")
+# => %LovelyMermaid.Art{
 #      plain: ["┌───────┐    ┌──────┐", "│ Start ├───▶│ Done │", ...],
 #      styled: [...], width: 21, class_defs: %{}, warnings: []}
 ```
@@ -14,7 +14,7 @@ GrokMermaid.render("flowchart LR\n  A[Start] --> B[Done]")
 
 ```elixir
 def deps do
-  [{:grok_mermaid, "~> 0.1"}]
+  [{:lovely_mermaid, "~> 0.1"}]
 end
 ```
 
@@ -22,13 +22,13 @@ end
 
 | Function | Returns |
 |---|---|
-| `GrokMermaid.render(src)` | `%GrokMermaid.Art{}` (`plain`, `styled` [[span]], `width`, `class_defs`, `warnings`) or `nil` |
-| `GrokMermaid.diagram_kind(src)` | `:flowchart \| :state \| :class \| :er \| :sequence \| :pie \| :mindmap \| :timeline \| :gitgraph \| nil` |
-| `GrokMermaid.SourceBox.source_box(src, max_width \\ nil)` | Framed source lines, for when a diagram won't render |
-| `GrokMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())` | ANSI-coloured lines from `art.styled` |
-| `GrokMermaid.ClassStyle.resolve_class_style(classes, class_defs)` | Merged `classDef` style for a span, or `nil` |
+| `LovelyMermaid.render(src)` | `%LovelyMermaid.Art{}` (`plain`, `styled` [[span]], `width`, `class_defs`, `warnings`) or `nil` |
+| `LovelyMermaid.diagram_kind(src)` | `:flowchart \| :state \| :class \| :er \| :sequence \| :pie \| :mindmap \| :timeline \| :gitgraph \| nil` |
+| `LovelyMermaid.SourceBox.source_box(src, max_width \\ nil)` | Framed source lines, for when a diagram won't render |
+| `LovelyMermaid.Ansi.to_ansi(art, theme \\ Ansi.default_theme())` | ANSI-coloured lines from `art.styled` |
+| `LovelyMermaid.ClassStyle.resolve_class_style(classes, class_defs)` | Merged `classDef` style for a span, or `nil` |
 
-Each `span` in `styled` is a `GrokMermaid.Span` — `%Span{text, role}`
+Each `span` in `styled` is a `LovelyMermaid.Span` — `%Span{text, role}`
 with `classes` (author-assigned names from `:::name` / `class A,B name`)
 and `href` (a `click`/`link` target), both `nil` when the node had
 neither. `to_ansi/2` styles classed spans from `art.class_defs` (best
@@ -46,7 +46,7 @@ dropping the final line, so streaming sources stay on screen).
 
 `graph`/`flowchart` (including `subgraph`), `stateDiagram`,
 `classDiagram`, `erDiagram`, `sequenceDiagram`, `pie`, `mindmap`, `timeline`,
-`gitGraph` — mirroring grok-mermaid (lovely-mermaid). Flowchart nodes accept
+`gitGraph` — mirroring lovely-mermaid. Flowchart nodes accept
 both the v1 shape brackets and the v2 `id@{shape: …, label: …}` syntax;
 `state X { … }` composites nest as frames with `--` region dividers; diamond
 nodes draw as double-line boxes with mixed edge tees.
@@ -58,4 +58,4 @@ Rust references.
 
 ## License
 
-Apache-2.0 (same as the original grok-mermaid).
+Apache-2.0 (same as the original lovely-mermaid).

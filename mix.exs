@@ -1,12 +1,12 @@
-defmodule GrokMermaid.MixProject do
+defmodule LovelyMermaid.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/gilbertwong/grok_mermaid"
+  @source_url "https://github.com/gilbertwong/lovely_mermaid"
 
   def project do
     [
-      app: :grok_mermaid,
+      app: :lovely_mermaid,
       version: @version,
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
@@ -21,12 +21,12 @@ defmodule GrokMermaid.MixProject do
       package: package(),
 
       # Documentation
-      name: "GrokMermaid",
+      name: "LovelyMermaid",
       source_url: @source_url,
       homepage_url: @source_url,
       source_ref: "v#{@version}",
       docs: [
-        main: "GrokMermaid",
+        main: "LovelyMermaid",
         source_url: @source_url,
         source_ref: "v#{@version}"
       ]
@@ -69,11 +69,11 @@ defmodule GrokMermaid.MixProject do
 
   defp package do
     [
-      name: "grok_mermaid",
+      name: "lovely_mermaid",
       licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => @source_url,
-        "Original (grok-mermaid, npm)" => "https://github.com/xl0/grok-mermaid"
+        "Original (lovely-mermaid, npm)" => "https://github.com/xl0/lovely-mermaid"
       },
       files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md)
     ]

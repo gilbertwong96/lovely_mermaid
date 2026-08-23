@@ -1,11 +1,11 @@
-defmodule GrokMermaid.Labels do
+defmodule LovelyMermaid.Labels do
   @moduledoc """
   Label text helpers, ported from grok-mermaid's labels.ts: control
   stripping, HTML entity decoding, markdown/HTML tag stripping, and
   width-aware wrapping and truncation.
   """
 
-  alias GrokMermaid.Width
+  alias LovelyMermaid.Width
 
   # Node labels wrap to at most this many display columns per line ...
   @wrap_width 24

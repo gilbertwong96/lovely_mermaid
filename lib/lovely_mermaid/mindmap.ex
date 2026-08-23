@@ -1,11 +1,11 @@
-defmodule GrokMermaid.Mindmap do
+defmodule LovelyMermaid.Mindmap do
   @moduledoc """
   `mindmap`: an indentation tree, drawn the way every TUI draws trees
   (`├──`/`└──` guides), ported from grok-mermaid's mindmap.ts. Parses raw
   lines rather than statements — the indentation IS the grammar.
   """
 
-  alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
+  alias LovelyMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   @doc "Render a `mindmap` source to a canvas, or `nil` when nothing parses."
   @spec render(String.t()) :: {Canvas.t(), map(), [String.t()]} | nil

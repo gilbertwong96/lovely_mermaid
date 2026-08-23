@@ -1,10 +1,10 @@
-defmodule GrokMermaidTest do
+defmodule LovelyMermaidTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid
+  alias LovelyMermaid
 
   defp render_plain(src) do
-    art = GrokMermaid.render(src)
+    art = LovelyMermaid.render(src)
     if art, do: art.plain, else: nil
   end
 
@@ -89,7 +89,7 @@ defmodule GrokMermaidTest do
 
   test "sequence diagrams render lifelines, messages and dividers" do
     art =
-      GrokMermaid.render("""
+      LovelyMermaid.render("""
       sequenceDiagram
         participant Alice
         participant Bob
@@ -147,18 +147,18 @@ defmodule GrokMermaidTest do
   end
 
   test "render returns nil for unsupported sources" do
-    assert GrokMermaid.render("") == nil
-    assert GrokMermaid.render("just some text") == nil
+    assert LovelyMermaid.render("") == nil
+    assert LovelyMermaid.render("just some text") == nil
   end
 
   test "diagram_kind is exported" do
-    assert GrokMermaid.diagram_kind("flowchart LR\n A --> B") == :flowchart
-    assert GrokMermaid.diagram_kind("sequenceDiagram\n A->>B: hi") == :sequence
-    assert GrokMermaid.diagram_kind("nope") == nil
+    assert LovelyMermaid.diagram_kind("flowchart LR\n A --> B") == :flowchart
+    assert LovelyMermaid.diagram_kind("sequenceDiagram\n A->>B: hi") == :sequence
+    assert LovelyMermaid.diagram_kind("nope") == nil
   end
 
   test "source_box frames the source" do
-    art = GrokMermaid.SourceBox.source_box("flowchart LR\n  A --> B", 20)
+    art = LovelyMermaid.SourceBox.source_box("flowchart LR\n  A --> B", 20)
     assert art.plain |> hd() =~ "╭ mermaid: flowchart"
     assert art.width > 10
 
@@ -168,8 +168,8 @@ defmodule GrokMermaidTest do
   end
 
   test "to_ansi colors styled spans" do
-    art = GrokMermaid.SourceBox.source_box("graph TD\n  A --> B", 20)
-    lines = GrokMermaid.Ansi.to_ansi(art)
+    art = LovelyMermaid.SourceBox.source_box("graph TD\n  A --> B", 20)
+    lines = LovelyMermaid.Ansi.to_ansi(art)
     assert Enum.all?(lines, &String.contains?(&1, "\e["))
   end
 end

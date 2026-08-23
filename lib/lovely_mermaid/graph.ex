@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Graph do
+defmodule LovelyMermaid.Graph do
   @moduledoc """
   The shared diagram model, ported from grok-mermaid's graph.ts.
 
@@ -103,7 +103,7 @@ defmodule GrokMermaid.Graph do
   """
   @spec parse_dir(String.t()) :: dir()
   def parse_dir(token) do
-    case GrokMermaid.Labels.ascii_upper(token) do
+    case LovelyMermaid.Labels.ascii_upper(token) do
       "LR" -> :right
       "RL" -> :left
       "BT" -> :up

@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Span do
+defmodule LovelyMermaid.Span do
   @moduledoc """
   One run of same-role cells in a `styled` row.
 

@@ -1,10 +1,10 @@
-# GrokMermaid: porting plan
+# LovelyMermaid: porting plan
 
 Elixir port of the terminal Mermaid renderer. Two reference implementations:
 
 - **Rust original**: `xai-org/grok-build` → `crates/codegen/xai-grok-markdown/src/mermaid.rs`
   (~4k lines, `graph`/`flowchart`, `sequenceDiagram`, `stateDiagram`)
-- **TypeScript port**: `xl0/grok-mermaid` (npm, zero-dep) — the primary
+- **TypeScript port**: `xl0/lovely-mermaid` (npm, zero-dep) — the primary
   reference. Adds `classDiagram`, `erDiagram`, `subgraph`, semantic class
   spans, a grapheme-aware width table, and a warning/retry strategy.
 
@@ -12,27 +12,27 @@ Elixir port of the terminal Mermaid renderer. Two reference implementations:
 
 | TS source | Elixir module | Notes |
 |---|---|---|
-| `width.ts` + `width-data.ts` | `GrokMermaid.Width` | UAX #11 table is generated from `width-data.ts`; grapheme clustering via `String.graphemes/1` (UAX #29, same as `Intl.Segmenter`) |
-| `canvas.ts` | `GrokMermaid.Canvas` | Direction-bit accumulation (`U/D/L/R`), line styles, `occupied`, `finalizeMask`, `blit`. The core of correct crossings |
-| `graph.ts` | `GrokMermaid.Graph` | Shared model + caps (`MAX_NODES=128`, `MAX_EDGES=512`, …) |
-| `labels.ts` | `GrokMermaid.Labels` | ANSI stripping, `asciiUpper`, label helpers |
-| `parse.ts` | `GrokMermaid.Parse` | `flowchart`/`state`/`class`/`er`/`sequence` grammars |
-| `diagrams/pie.ts` | `GrokMermaid.Pie` | Bar-list proportions |
-| `diagrams/mindmap.ts` | `GrokMermaid.Mindmap` | Indentation tree |
-| `diagrams/timeline.ts` | `GrokMermaid.Timeline` | Periods and events |
-| `diagrams/gitgraph.ts` | `GrokMermaid.GitGraph` | Commit lanes |
-| `layout.ts` | `GrokMermaid.Layout` | Flowchart (incl. `subgraph`), class, ER layout |
-| `layout-seq.ts` | `GrokMermaid.LayoutSeq` | Sequence diagram layout |
-| `ansi.ts` | `GrokMermaid.Ansi` | `Cls` → ANSI theme mapping |
-| `source-box.ts` | `GrokMermaid.SourceBox` | Framed-source fallback |
-| `index.ts` | `GrokMermaid` | `render/1` entry, warnings, drop-last-line retry |
+| `width.ts` + `width-data.ts` | `LovelyMermaid.Width` | UAX #11 table is generated from `width-data.ts`; grapheme clustering via `String.graphemes/1` (UAX #29, same as `Intl.Segmenter`) |
+| `canvas.ts` | `LovelyMermaid.Canvas` | Direction-bit accumulation (`U/D/L/R`), line styles, `occupied`, `finalizeMask`, `blit`. The core of correct crossings |
+| `graph.ts` | `LovelyMermaid.Graph` | Shared model + caps (`MAX_NODES=128`, `MAX_EDGES=512`, …) |
+| `labels.ts` | `LovelyMermaid.Labels` | ANSI stripping, `asciiUpper`, label helpers |
+| `parse.ts` | `LovelyMermaid.Parse` | `flowchart`/`state`/`class`/`er`/`sequence` grammars |
+| `diagrams/pie.ts` | `LovelyMermaid.Pie` | Bar-list proportions |
+| `diagrams/mindmap.ts` | `LovelyMermaid.Mindmap` | Indentation tree |
+| `diagrams/timeline.ts` | `LovelyMermaid.Timeline` | Periods and events |
+| `diagrams/gitgraph.ts` | `LovelyMermaid.GitGraph` | Commit lanes |
+| `layout.ts` | `LovelyMermaid.Layout` | Flowchart (incl. `subgraph`), class, ER layout |
+| `layout-seq.ts` | `LovelyMermaid.LayoutSeq` | Sequence diagram layout |
+| `ansi.ts` | `LovelyMermaid.Ansi` | `Cls` → ANSI theme mapping |
+| `source-box.ts` | `LovelyMermaid.SourceBox` | Framed-source fallback |
+| `index.ts` | `LovelyMermaid` | `render/1` entry, warnings, drop-last-line retry |
 
-## Public API (mirrors grok-mermaid)
+## Public API (mirrors lovely-mermaid)
 
 ```elixir
-GrokMermaid.render(src)     # => %{plain: [String], styled: [[span]], width: int, warnings: [String]} | nil
-GrokMermaid.diagram_kind(src)  # => :flowchart | :state | :class | :er | :sequence | nil
-GrokMermaid.source_box(src, width)
+LovelyMermaid.render(src)     # => %{plain: [String], styled: [[span]], width: int, warnings: [String]} | nil
+LovelyMermaid.diagram_kind(src)  # => :flowchart | :state | :class | :er | :sequence | nil
+LovelyMermaid.source_box(src, width)
 ```
 
 `render` returns `nil` for blank input, syntax errors, unsupported kinds and

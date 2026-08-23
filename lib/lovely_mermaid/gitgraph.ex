@@ -1,4 +1,4 @@
-defmodule GrokMermaid.GitGraph do
+defmodule LovelyMermaid.GitGraph do
   @moduledoc """
   `gitGraph`: commit lanes, drawn the way `git log --graph` draws them —
   newest commit on top, one column per branch, connector rows where
@@ -9,7 +9,7 @@ defmodule GrokMermaid.GitGraph do
   across an active lane crosses it with a `┼` instead of erasing it.
   """
 
-  alias GrokMermaid.{Canvas, Graph, Labels, Parse, Width}
+  alias LovelyMermaid.{Canvas, Graph, Labels, Parse, Width}
 
   defmodule Commit do
     @moduledoc false

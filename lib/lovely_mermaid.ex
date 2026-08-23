@@ -1,17 +1,17 @@
-defmodule GrokMermaid do
+defmodule LovelyMermaid do
   @moduledoc """
   Render a Mermaid source block as Unicode box-drawing art for the
-  terminal, mirroring pi's grok-mermaid transformer.
+  terminal, mirroring pi's lovely-mermaid transformer.
 
   Supported: `graph`/`flowchart` (including `subgraph`), `stateDiagram`,
   `classDiagram`, `erDiagram` and `sequenceDiagram`.
 
   The diagram is laid out at whatever size it needs; `art.width` reports
   the columns that turned out to be. Deciding what to do when that exceeds
-  the space at hand is the caller's — `GrokMermaid.SourceBox.source_box/2`
+  the space at hand is the caller's — `LovelyMermaid.SourceBox.source_box/2`
   is the usual answer:
 
-      art = GrokMermaid.render(src)
+      art = LovelyMermaid.render(src)
       show(art && art.width <= cols ? art : source_box(src, cols))
 
   `nil` means there is no art to show: blank input, a syntax error, a
@@ -25,7 +25,7 @@ defmodule GrokMermaid do
   advisory only, never a reason to withhold the art.
   """
 
-  alias GrokMermaid.{
+  alias LovelyMermaid.{
     Art,
     Canvas,
     Span,
@@ -43,7 +43,7 @@ defmodule GrokMermaid do
   @doc """
   Renders a Mermaid source to Unicode art.
 
-  Returns `%GrokMermaid.Art{}` or `nil` when there is nothing to draw.
+  Returns `%LovelyMermaid.Art{}` or `nil` when there is nothing to draw.
   """
   @spec render(String.t()) :: Art.t() | nil
   def render(src) when is_binary(src) do

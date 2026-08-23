@@ -1,10 +1,10 @@
-defmodule GrokMermaid.Ansi do
+defmodule LovelyMermaid.Ansi do
   @moduledoc """
   SGR parameter per semantic class, ported from grok-mermaid's ansi.ts.
   A class left out is printed unstyled.
   """
 
-  alias GrokMermaid.ClassStyle
+  alias LovelyMermaid.ClassStyle
 
   @esc <<27>>
   @osc8 "#{@esc}]8;;"

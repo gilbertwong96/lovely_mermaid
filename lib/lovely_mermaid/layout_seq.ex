@@ -1,4 +1,4 @@
-defmodule GrokMermaid.LayoutSeq do
+defmodule LovelyMermaid.LayoutSeq do
   @moduledoc """
   Sequence diagram layout, ported from grok-mermaid's layout-seq.ts.
 
@@ -9,8 +9,8 @@ defmodule GrokMermaid.LayoutSeq do
   order.
   """
 
-  alias GrokMermaid.{Canvas, Labels, Layout, Width}
-  alias GrokMermaid.Parse.Sequence
+  alias LovelyMermaid.{Canvas, Labels, Layout, Width}
+  alias LovelyMermaid.Parse.Sequence
 
   @pad 1
   # Minimum columns between adjacent lifelines.

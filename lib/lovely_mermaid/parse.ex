@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Parse do
+defmodule LovelyMermaid.Parse do
   defmodule Shaped do
     @moduledoc false
     defstruct [:shape, :label, :after, :unclosed]
@@ -17,7 +17,7 @@ defmodule GrokMermaid.Parse do
   falls back to a framed copy of the source when they all decline.
   """
 
-  alias GrokMermaid.{Graph, Labels}
+  alias LovelyMermaid.{Graph, Labels}
 
   # ------------------------------------------------------------ statements
 
@@ -230,7 +230,7 @@ defmodule GrokMermaid.Parse do
   Parse the body of a `classDef` statement: `name[,name2] k1:v1,k2:v2`.
   Values are kept verbatim; malformed pairs are skipped.
   """
-  @spec parse_class_def(String.t(), GrokMermaid.Graph.t()) :: GrokMermaid.Graph.t()
+  @spec parse_class_def(String.t(), LovelyMermaid.Graph.t()) :: LovelyMermaid.Graph.t()
   def parse_class_def(st, graph) do
     rest = String.replace_prefix(st, first_word(st), "") |> String.trim()
 
@@ -422,7 +422,7 @@ defmodule GrokMermaid.Parse do
   # -------------------------------------------------------------- flowchart
 
   @doc "Parse a `graph`/`flowchart` source into a graph model."
-  @spec parse_graph(String.t()) :: GrokMermaid.Graph.t() | nil
+  @spec parse_graph(String.t()) :: LovelyMermaid.Graph.t() | nil
   def parse_graph(src) do
     statements = statements_of(src)
     kind = header_kind(statements)
@@ -495,7 +495,7 @@ defmodule GrokMermaid.Parse do
   `&`. Parses as far as it can and keeps the prefix; whatever it could
   not read is recorded in `graph.warnings`.
   """
-  @spec parse_statement(String.t(), GrokMermaid.Graph.t()) :: GrokMermaid.Graph.t()
+  @spec parse_statement(String.t(), LovelyMermaid.Graph.t()) :: LovelyMermaid.Graph.t()
   def parse_statement(st, graph) do
     case first_word(st) |> Labels.ascii_lower() do
       "subgraph" ->
@@ -605,8 +605,8 @@ defmodule GrokMermaid.Parse do
   end
 
   @doc "One or more nodes joined by `&`, which fan out into a cross product."
-  @spec parse_node_group(tuple(), non_neg_integer(), GrokMermaid.Graph.t()) ::
-          {GrokMermaid.Graph.t(), {[non_neg_integer()], non_neg_integer()} | nil}
+  @spec parse_node_group(tuple(), non_neg_integer(), LovelyMermaid.Graph.t()) ::
+          {LovelyMermaid.Graph.t(), {[non_neg_integer()], non_neg_integer()} | nil}
   def parse_node_group(chars, start, graph) do
     case parse_node(chars, start, graph) do
       {graph, nil} ->
@@ -1027,7 +1027,7 @@ defmodule GrokMermaid.Parse do
   # ----------------------------------------------------------------- state
 
   @doc "Parse a `stateDiagram` source into a graph model."
-  @spec parse_state(String.t()) :: GrokMermaid.Graph.t() | nil
+  @spec parse_state(String.t()) :: LovelyMermaid.Graph.t() | nil
   def parse_state(src) do
     statements = statements_of(src)
     kind = header_kind(statements)
@@ -1448,7 +1448,8 @@ defmodule GrokMermaid.Parse do
   ]
 
   @doc "Parse a `classDiagram` source into a graph and class infos."
-  @spec parse_class(String.t()) :: {GrokMermaid.Graph.t(), [GrokMermaid.Graph.class_info()]} | nil
+  @spec parse_class(String.t()) ::
+          {LovelyMermaid.Graph.t(), [LovelyMermaid.Graph.class_info()]} | nil
   def parse_class(src) do
     statements = statements_of(src)
     kind = header_kind(statements)
@@ -1667,7 +1668,8 @@ defmodule GrokMermaid.Parse do
   end
 
   @doc "Add a member to the attribute or method compartment, eliding past the cap."
-  @spec push_member(GrokMermaid.Graph.class_info(), String.t()) :: GrokMermaid.Graph.class_info()
+  @spec push_member(LovelyMermaid.Graph.class_info(), String.t()) ::
+          LovelyMermaid.Graph.class_info()
   def push_member(info, raw) do
     if String.starts_with?(raw, "<<") do
       case String.split(String.slice(raw, 2..-1//1), ">>", parts: 2) do
@@ -1792,7 +1794,8 @@ defmodule GrokMermaid.Parse do
   # ----------------------------------------------------------------- ER
 
   @doc "Parse an `erDiagram` source into a graph and entity infos."
-  @spec parse_er(String.t()) :: {GrokMermaid.Graph.t(), [GrokMermaid.Graph.class_info()]} | nil
+  @spec parse_er(String.t()) ::
+          {LovelyMermaid.Graph.t(), [LovelyMermaid.Graph.class_info()]} | nil
   def parse_er(src) do
     statements = statements_of(src)
     if header_kind(statements) != "erdiagram", do: nil
@@ -2031,7 +2034,7 @@ defmodule GrokMermaid.Parse do
           end
 
         :error ->
-          if length(seq.labels) >= GrokMermaid.Graph.max_nodes() do
+          if length(seq.labels) >= LovelyMermaid.Graph.max_nodes() do
             {seq, nil}
           else
             seq = %{
@@ -2109,7 +2112,7 @@ defmodule GrokMermaid.Parse do
             nil
 
           {seq, text, anchor} ->
-            if length(seq.items) >= GrokMermaid.Graph.max_edges() do
+            if length(seq.items) >= LovelyMermaid.Graph.max_edges() do
               nil
             else
               seq = %{seq | items: seq.items ++ [{:note, anchor, text}]}
@@ -2130,7 +2133,7 @@ defmodule GrokMermaid.Parse do
             %{seq | items: seq.items ++ [{:divider, Labels.decode_html_entities(st)}]}
           end
 
-        if length(seq.items) >= GrokMermaid.Graph.max_edges() do
+        if length(seq.items) >= LovelyMermaid.Graph.max_edges() do
           nil
         else
           blocks = if lower in ["else", "and", "option"], do: blocks, else: [:open | blocks]
@@ -2144,7 +2147,7 @@ defmodule GrokMermaid.Parse do
         {blocks, seq} =
           case List.last(blocks) do
             :open ->
-              if length(seq.items) >= GrokMermaid.Graph.max_edges() do
+              if length(seq.items) >= LovelyMermaid.Graph.max_edges() do
                 {blocks, seq}
               else
                 {tl(blocks), %{seq | items: seq.items ++ [{:divider, "end"}]}}
@@ -2154,7 +2157,7 @@ defmodule GrokMermaid.Parse do
               {tl(blocks), seq}
           end
 
-        if length(seq.items) >= GrokMermaid.Graph.max_edges() do
+        if length(seq.items) >= LovelyMermaid.Graph.max_edges() do
           nil
         else
           parse_sequence_statements(rest, seq, autonumber, msg_count, blocks)
@@ -2173,7 +2176,7 @@ defmodule GrokMermaid.Parse do
                 text
               end
 
-            if length(seq.items) >= GrokMermaid.Graph.max_edges() do
+            if length(seq.items) >= LovelyMermaid.Graph.max_edges() do
               nil
             else
               seq = %{seq | items: seq.items ++ [{:message, from, to, text, dashed, head}]}

@@ -1,4 +1,4 @@
-defmodule GrokMermaid.Width do
+defmodule LovelyMermaid.Width do
   @moduledoc """
   Display width, measured in grapheme clusters, mirroring grok-mermaid's
   width.ts.

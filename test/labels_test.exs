@@ -1,7 +1,7 @@
-defmodule GrokMermaid.LabelsTest do
+defmodule LovelyMermaid.LabelsTest do
   use ExUnit.Case, async: true
 
-  alias GrokMermaid.Labels
+  alias LovelyMermaid.Labels
 
   test "clean_label unquotes, strips markup and decodes entities" do
     assert Labels.clean_label("\"Hello world\"") == "Hello world"
